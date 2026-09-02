@@ -116,8 +116,12 @@ This matches the real exam, where a warning is a failure.
 that set subtract:
 
 - the exercise's `allowed_functions`
-- the exercise's own entry point (a function exercise may call itself)
 - a per-platform whitelist of compiler-emitted builtins
+
+Functions the user defines in their own file — including the exercise function
+itself, called recursively — resolve within the translation unit and never
+appear in `nm -u`. This was verified against clang rather than assumed, so no
+subtraction is needed for them.
 
 Anything left → KO, "forbidden function: <name>".
 
@@ -153,9 +157,19 @@ behaviour, which is the same standard the upstream repository already sets.
 
 ### Test cases
 
-`cases.txt` holds one case per line. Each line is an argv vector in shell-like
-quoting; stdin is not used by any upstream exercise, but the format reserves a
-`stdin:` prefix so the runner does not need reworking if that changes.
+`cases.txt` holds one case per line as a JSON object:
+
+```
+{"args": ["hello world"]}
+{"args": [""]}
+{"args": []}
+```
+
+JSON rather than shell-like quoting because it needs no custom parser and is
+unambiguous about the two cases that matter here — an empty-string argument and
+an absent argument, which several exercises distinguish. An optional `"stdin"`
+field is accepted; no upstream exercise uses it, but supporting it costs one
+struct field and avoids reworking the runner later.
 
 Cases are hand-curated per exercise and must cover, where meaningful: the empty
 input, a single element, the ordinary case, the boundary case named in the
@@ -180,8 +194,12 @@ practice.
 
 ### Exam
 
+- **An exam is exactly four exercises: one drawn from each level.** The 12
+  Level 1 exercises, 19 Level 2, and so on are draw pools, not queues — a
+  large pool exists so the candidate cannot predict or memorise which exercise
+  they will get, not so they have to solve all of them.
 - Countdown timer over the whole session.
-- Starts at Level 1 with a random exercise from that level.
+- Starts at Level 1 with a random exercise drawn from that level's pool.
 - OK → advance a level, draw a new random exercise.
 - KO → draw a new random exercise from the same level. Attempts are unlimited
   within the time limit.
