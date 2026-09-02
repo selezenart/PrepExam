@@ -51,9 +51,10 @@ internal/catalog/           embedded exercise data, meta parsing, lookup
 internal/session/           exam state machine, timer, scoring, persistence
 internal/grader/            compile → symbols → link → run → diff
 internal/sandbox/           process execution with timeout and group kill
-internal/config/            defaults, config file load
-tools/import/               one-shot importer: third_party → data/exercises
-data/exercises/<name>/      generated + hand-authored exercise data (embedded)
+internal/store/             config defaults and persisted progress
+internal/workspace/         seeds rendu/, launches the editor
+tools/import/               one-shot importer: third_party → exercise data
+internal/catalog/exercises/ generated + hand-authored exercise data (embedded)
 ```
 
 Each package has one responsibility and a narrow interface. `grader` knows
@@ -64,8 +65,11 @@ the exam rules testable without a compiler.
 
 ### Exercise data format
 
+The tree lives under `internal/catalog/` rather than a top-level `data/`
+because `go:embed` cannot read above its own directory.
+
 ```
-data/exercises/ft_split/
+internal/catalog/exercises/ft_split/
   subject.md      copied from upstream README.md
   spanish.md      copied verbatim, shown in practice mode only
   reference.c     the oracle
@@ -248,6 +252,11 @@ Linux, `~/Library/Application Support/exam02` on macOS. It holds per-exercise
 statistics and any in-progress exam session, so a crash or an accidental quit
 does not destroy a run. Writes are atomic: write to a temporary file in the same
 directory, then rename.
+
+A resumed exam keeps its original start time, so the clock carries on rather
+than restarting — otherwise quitting and reopening would be a way to buy
+unlimited time. An exam that has finished is cleared from state rather than
+offered for resumption.
 
 `config.yaml` sits beside it and holds the exam-rule defaults above.
 
