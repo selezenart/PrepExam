@@ -181,7 +181,7 @@ type SubjectMeta struct {
 
 // ParseSubject extracts the header fields from an upstream subject document.
 //
-// ExpectedFile may come back empty: four subjects write a glob such as
+// ExpectedFile may come back empty: two subjects write a glob such as
 // "*.c, *.h" rather than naming a file, and a glob cannot be resolved without
 // knowing the exercise. Those four carry a hand-written expected_file in their
 // meta.yaml instead.
@@ -267,7 +267,7 @@ git commit -m "feat(catalog): parse upstream exercise subjects
 
 Reads assignment name, expected file and allowed functions out of the
 subject header. Handles the five spellings that occur upstream, including
-the four subjects whose expected files are a glob and so cannot be
+the two subjects whose expected files are a glob and so cannot be
 resolved automatically.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
@@ -818,7 +818,7 @@ Create `tools/import/main.go`:
 //
 // It is run by hand, and its output is committed. Two fields it writes are
 // guesses that a human must confirm: kind, because a phrase heuristic
-// classifies only 43 of 56 subjects, and expected_file for the four subjects
+// classifies only 43 of 56 subjects, and expected_file for the two subjects
 // whose expected files are a glob.
 //
 // Usage: go run ./tools/import -src third_party/exam_rank_02 -dst data/exercises
@@ -5149,7 +5149,7 @@ them uncertain — every one of those is a function.
 | --- | --- | --- | --- |
 | alpha_mirror | program | — | write |
 | camel_to_snake | program | — | malloc, realloc, write |
-| do_op | program | — | atoi, printf, write |
+| do_op | program | — | atoi, printf, write | *(glob subject: `expected_file` is not parseable and must read `do_op.c`)* |
 | ft_atoi | function | `int ft_atoi(const char *str);` | none |
 | ft_strcmp | function | `int ft_strcmp(char *s1, char *s2);` | none |
 | ft_strcspn | function | `size_t ft_strcspn(const char *s, const char *reject);` | none |
@@ -5450,9 +5450,10 @@ one taking a struct.
 | sort_int_tab | function | `void sort_int_tab(int *tab, unsigned int size);` | none | — |
 | sort_list | function | `t_list *sort_list(t_list* lst, int (*cmp)(int, int));` | none | list.h |
 
-`flood_fill` and `sort_list` are two of the four subjects whose expected files
-are the glob `*.c, *.h`, so their `expected_file` must be set by hand to
-`flood_fill.c` and `sort_list.c`.
+`flood_fill` is one of only two subjects whose expected files are the glob
+`*.c, *.h` (the other is `do_op`, in Level 2), so its `expected_file` cannot be
+parsed and must read `flood_fill.c`. Confirm the importer's fallback produced
+that. Every other Level 4 exercise names its `.c` explicitly.
 
 - [ ] **Step 2: Write the seven drivers**
 

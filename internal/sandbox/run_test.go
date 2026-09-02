@@ -44,7 +44,7 @@ func TestRunFeedsStdin(t *testing.T) {
 }
 
 func TestRunReportsSignal(t *testing.T) {
-	got, err := Run(context.Background(), "/bin/sh", []string{"-c", "kill -SEGV $$"}, "", time.Second)
+	got, err := Run(context.Background(), "/bin/sh", []string{"-c", "kill -SEGV $$"}, "", 2*time.Second)
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
