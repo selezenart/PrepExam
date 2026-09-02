@@ -57,18 +57,10 @@ func Run(ctx context.Context, bin string, args []string, stdin string, timeout t
 	case err := <-done:
 		result = describe(err)
 	case <-ctx.Done():
-		// Try to wait a tiny bit for the process to complete naturally
-		// before killing it. This helps with systems where apport adds
-		// delay to crash handling, allowing us to capture the actual signal.
-		select {
-		case err := <-done:
-			result = describe(err)
-		case <-time.After(200 * time.Millisecond):
-			// Negating the pid addresses the whole process group.
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			<-done
-			result = Result{TimedOut: true, ExitCode: -1}
-		}
+		// Negating the pid addresses the whole process group.
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		<-done
+		result = Result{TimedOut: true, ExitCode: -1}
 	}
 
 	result.Stdout = stdout.String()
