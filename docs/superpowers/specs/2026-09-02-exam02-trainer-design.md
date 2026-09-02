@@ -190,14 +190,18 @@ practice.
   screen shows the level reached, points, elapsed time, and a per-exercise
   history.
 
-**Defaults are assumptions, not verified exam rules.** The real Moulinette's
-time limit, points table, and retry-penalty behaviour are not documented in a
-source this project has verified, and inventing precise numbers and presenting
-them as authentic would be worse than stating the gap. Defaults: three hours,
-one passing exercise required to clear a level, no cooldown after a
-failure, points 1/2/3/4 by level.
-All live in `config.yaml` next to the state file and are changeable in one
-line. If the real values are supplied later, they become the defaults.
+**Scoring.** Three hours total. Each exercise passed is worth 25 points, and
+100 points is a pass — so passing the simulated exam means clearing all four
+levels, one exercise per level, inside the time limit. A failed attempt costs
+no points; it costs time, which is the real constraint.
+
+The header shows points and remaining time, because those are the two numbers
+that drive decisions during a real exam. The result screen states pass or fail
+against the 100-point threshold, not just the level reached.
+
+These values live in `config.yaml` beside the state file, so a variant ruleset
+can be tried without a rebuild. There is no retry cooldown: the time limit is
+already the penalty for a failed attempt.
 
 ### Practice
 
