@@ -27,9 +27,11 @@ These apply to every task; each task's requirements implicitly include them.
 
 ## Scope
 
-This plan delivers a complete, shippable application whose exercise content is Level 1 only (12 of 56). Every engine, mode, and release mechanism is finished and tested; only the driver and case files for Levels 2–4 are outstanding. That is deliberate — Task 7 proves the entire pipeline against 12 real exercises before the remaining 44 drivers are written, and a driver bug found at exercise 3 is far cheaper than the same bug found at exercise 50.
+This plan delivers the complete application: every engine, both modes, the release pipeline, and all 56 exercises.
 
-Levels 2–4 content is a follow-on plan. It repeats Task 7's pattern per exercise and needs no engine changes.
+Task 7 deliberately authors Level 1 alone and proves the entire pipeline against those 12 real exercises before the remaining 44 drivers are written — a driver bug found at exercise 3 is far cheaper than the same bug found at exercise 50. Tasks 15, 16 and 17 then author Levels 2, 3 and 4 by repeating that pattern.
+
+**Execution order: 1-7, then 15, 16, 17, then 8-14.** The content tasks run before the interface tasks because an exam draws one exercise from each of the four levels: until every level has gradable content, exam mode cannot start, and Tasks 11 to 13 could not be exercised against a working exam.
 
 ---
 
@@ -399,6 +401,17 @@ type Exercise struct {
 	Cases         []Case
 }
 
+// Gradable reports whether this exercise has the driver and cases needed to
+// grade an answer. The importer generates every exercise's subject and
+// reference solution, but drivers and cases are written by hand afterwards,
+// so an exercise can legitimately exist without yet being gradable.
+func (e Exercise) Gradable() bool {
+	if len(e.Cases) == 0 {
+		return false
+	}
+	return e.Kind != KindFunction || e.Driver != ""
+}
+
 // Timeout is how long one run of this exercise may take, in milliseconds.
 func (e Exercise) Timeout() int {
 	if e.TimeoutMS > 0 {
@@ -531,11 +544,53 @@ func TestLoadProgramKindNeedsNoDriver(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsFunctionExerciseWithoutDriver(t *testing.T) {
+func TestLoadRejectsFunctionExerciseWithCasesButNoDriver(t *testing.T) {
+	// Cases without a driver is a half-finished author's mistake, and must
+	// not pass silently.
 	fs := testFS()
 	delete(fs, "exercises/ft_strlen/driver.c")
 	if _, err := Load(fs); err == nil {
-		t.Fatal("Load() error = nil, want an error for a function exercise with no driver")
+		t.Fatal("Load() error = nil, want an error for a function exercise with cases but no driver")
+	}
+}
+
+func TestLoadAcceptsAnUnauthoredExerciseAsNonGradable(t *testing.T) {
+	// The importer generates all 56 exercise directories with neither a
+	// driver nor cases. Those are not yet authored, not corrupt: they must
+	// load so their subjects can be read, and simply not be gradable.
+	fs := testFS()
+	delete(fs, "exercises/ft_strlen/driver.c")
+	delete(fs, "exercises/ft_strlen/cases.txt")
+	c, err := Load(fs)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want an unauthored exercise to load", err)
+	}
+	ex, ok := c.ByName("ft_strlen")
+	if !ok {
+		t.Fatal("ByName(ft_strlen) not found")
+	}
+	if ex.Gradable() {
+		t.Error("Gradable() = true for an exercise with no cases, want false")
+	}
+	if ex.Subject == "" {
+		t.Error("Subject is empty; an unauthored exercise must still be readable")
+	}
+}
+
+func TestGradableByLevelExcludesUnauthored(t *testing.T) {
+	fs := testFS()
+	delete(fs, "exercises/ft_strlen/driver.c")
+	delete(fs, "exercises/ft_strlen/cases.txt")
+	c, err := Load(fs)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if n := len(c.ByLevel(1)); n != 2 {
+		t.Errorf("ByLevel(1) = %d, want 2: practice lists everything", n)
+	}
+	got := c.GradableByLevel(1)
+	if len(got) != 1 || got[0].Name != "rot_13" {
+		t.Errorf("GradableByLevel(1) = %v, want only rot_13", got)
 	}
 }
 
@@ -644,11 +699,9 @@ func loadExercise(fsys fs.FS, dir string) (Exercise, error) {
 		ex.Spanish = string(b)
 	}
 
-	if ex.Kind == KindFunction {
-		b, err := fs.ReadFile(fsys, dir+"/driver.c")
-		if err != nil {
-			return ex, fmt.Errorf("a function exercise needs driver.c: %w", err)
-		}
+	// A driver is required only once cases exist; see the cases.txt handling
+	// below for why an exercise may legitimately have neither yet.
+	if b, err := fs.ReadFile(fsys, dir+"/driver.c"); err == nil {
 		ex.Driver = string(b)
 	}
 
@@ -660,12 +713,20 @@ func loadExercise(fsys fs.FS, dir string) (Exercise, error) {
 		ex.HeaderContent = string(b)
 	}
 
+	// An exercise with no cases.txt is not yet authored: the importer creates
+	// every exercise's subject and reference, and drivers and cases follow by
+	// hand. Such an exercise loads so its subject can be read, and reports
+	// itself non-gradable. A cases.txt that exists but does not parse is a
+	// real mistake and still fails.
 	caseBytes, err := fs.ReadFile(fsys, dir+"/cases.txt")
 	if err != nil {
-		return ex, fmt.Errorf("reading cases.txt: %w", err)
+		return ex, nil
 	}
 	if ex.Cases, err = ParseCases(string(caseBytes)); err != nil {
 		return ex, fmt.Errorf("parsing cases.txt: %w", err)
+	}
+	if ex.Kind == KindFunction && ex.Driver == "" {
+		return ex, fmt.Errorf("has cases but no driver.c, which a function exercise needs")
 	}
 	return ex, nil
 }
@@ -685,6 +746,19 @@ func (c *Catalog) ByLevel(level int) []Exercise {
 	var out []Exercise
 	for _, n := range c.names {
 		if ex := c.byName[n]; ex.Level == level {
+			out = append(out, ex)
+		}
+	}
+	return out
+}
+
+// GradableByLevel returns the exercises of one level that can actually be
+// graded. Exams draw from these: drawing an exercise that cannot be graded
+// would strand the candidate on a level they have no way to clear.
+func (c *Catalog) GradableByLevel(level int) []Exercise {
+	var out []Exercise
+	for _, ex := range c.ByLevel(level) {
+		if ex.Gradable() {
 			out = append(out, ex)
 		}
 	}
@@ -911,7 +985,9 @@ func guessKind(subject string) (kind catalog.Kind, certain bool) {
 func extractPrototype(subject string) string {
 	lines := strings.Split(subject, "\n")
 	for i, line := range lines {
-		if !strings.Contains(line, "declared as follows") {
+		// Subjects use both "declared as follows" and "prototyped as follows".
+		if !strings.Contains(line, "declared as follows") &&
+			!strings.Contains(line, "prototyped as follows") {
 			continue
 		}
 		for _, candidate := range lines[i+1:] {
@@ -3965,7 +4041,7 @@ func (m Model) View() string {
 func (m Model) startExam() (Model, tea.Cmd) {
 	pools := map[int][]string{}
 	for level := 1; level <= 4; level++ {
-		for _, ex := range m.deps.Catalog.ByLevel(level) {
+		for _, ex := range m.deps.Catalog.GradableByLevel(level) {
 			pools[level] = append(pools[level], ex.Name)
 		}
 	}
@@ -4816,7 +4892,7 @@ func resumableExam(state *store.State, c *catalog.Catalog) *session.Exam {
 	}
 	pools := map[int][]string{}
 	for level := 1; level <= 4; level++ {
-		for _, ex := range c.ByLevel(level) {
+		for _, ex := range c.GradableByLevel(level) {
 			pools[level] = append(pools[level], ex.Name)
 		}
 	}
@@ -5047,6 +5123,471 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Follow-on: Levels 2 to 4
+### Task 15: Level 2 content
 
-Not part of this plan. It repeats Task 7 for the remaining 44 exercises: confirm `kind` and `expected_file` in each `meta.yaml`, write a driver for every function exercise, write a case file for every exercise, and keep `TestEveryReferenceSolutionPasses` and `TestMutatedReferencesFail` green. No engine change is expected; if one turns out to be needed — the linked-list exercises in Levels 3 and 4 are the likeliest to demand it, since their drivers must build a list from the provided header — that is a signal to stop and design it rather than to bend a driver around it.
+Same shape as Task 7, for the 19 Level 2 exercises. The engine does not change;
+if it turns out it must, stop and design the change rather than bending a
+driver around it.
+
+**Files:**
+- Modify: `meta.yaml` in all 19 Level 2 exercise directories
+- Create: `driver.c` in the 12 function-kind directories
+- Create: `cases.txt` in all 19 directories
+
+**Interfaces:**
+- Consumes: `catalog.Exercise`, the grader, and the suite from Tasks 2, 6 and 7.
+- Produces: 19 gradable exercises, so `GradableByLevel(2)` is no longer empty.
+
+- [ ] **Step 1: Confirm every meta.yaml**
+
+The importer guessed `kind`. These are the correct values, read from the
+subjects. Note that ten exercises across levels 2 to 4 write "prototyped as
+follows" rather than "declared as follows", so the importer's heuristic marks
+them uncertain — every one of those is a function.
+
+| Exercise | kind | prototype | allowed_functions |
+| --- | --- | --- | --- |
+| alpha_mirror | program | — | write |
+| camel_to_snake | program | — | malloc, realloc, write |
+| do_op | program | — | atoi, printf, write |
+| ft_atoi | function | `int ft_atoi(const char *str);` | none |
+| ft_strcmp | function | `int ft_strcmp(char *s1, char *s2);` | none |
+| ft_strcspn | function | `size_t ft_strcspn(const char *s, const char *reject);` | none |
+| ft_strdup | function | `char *ft_strdup(char *src);` | malloc |
+| ft_strpbrk | function | `char *ft_strpbrk(const char *s1, const char *s2);` | none |
+| ft_strrev | function | `char *ft_strrev(char *str);` | none |
+| ft_strspn | function | `size_t ft_strspn(const char *s, const char *accept);` | none |
+| is_power_of_2 | function | `int is_power_of_2(unsigned int n);` | none |
+| last_word | program | — | write |
+| max | function | `int max(int* tab, unsigned int len);` | none |
+| print_bits | function | `void print_bits(unsigned char octet);` | write |
+| reverse_bits | function | `unsigned char reverse_bits(unsigned char octet);` | none |
+| snake_to_camel | program | — | malloc, free, realloc, write |
+| swap_bits | function | `unsigned char swap_bits(unsigned char octet);` | none |
+| union | program | — | write |
+| wdmatch | program | — | write |
+
+- [ ] **Step 2: Write a driver for each of the 12 function exercises**
+
+A driver supplies `main`, calls the candidate's function on arguments taken
+from argv, and prints the result so a wrong answer differs as text. Drivers may
+use `printf` freely: they are our code, compiled separately, and never subject
+to the allowed-functions check.
+
+`ft_strdup` returns freshly allocated memory, so print the contents and confirm
+the result is not the input pointer — a "duplicate" that returns its argument
+would otherwise pass:
+
+```c
+#include <stdio.h>
+
+char	*ft_strdup(char *src);
+
+int	main(int argc, char **argv)
+{
+	char	*copy;
+
+	if (argc < 2)
+		return (1);
+	copy = ft_strdup(argv[1]);
+	if (!copy)
+	{
+		printf("(null)\n");
+		return (0);
+	}
+	printf("[%s]\n", copy);
+	printf("is_a_copy=%d\n", copy != argv[1]);
+	return (0);
+}
+```
+
+`max` takes an array and a length, so the driver builds the array from the
+remaining arguments:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+int	max(int *tab, unsigned int len);
+
+int	main(int argc, char **argv)
+{
+	int		tab[256];
+	int		i;
+
+	i = 0;
+	while (i < argc - 1 && i < 256)
+	{
+		tab[i] = atoi(argv[i + 1]);
+		i++;
+	}
+	printf("%d\n", max(tab, (unsigned int)i));
+	return (0);
+}
+```
+
+Note that `max` is specified to return 0 for a length of zero, so a case with
+no arguments belongs in its case file.
+
+`ft_strcspn` and `ft_strspn` return `size_t`, so print with `%zu`.
+`print_bits` writes directly and needs an end marker after it, exactly as
+`ft_putstr`'s driver in Task 7 does. `reverse_bits` and `swap_bits` take an
+`unsigned char`, so convert with `atoi` and cast.
+
+- [ ] **Step 3: Write a case file for each of the 19**
+
+Every case file covers, where the subject gives them meaning: the empty string,
+a single character, the ordinary case, the boundary the subject names, and the
+wrong argument counts. "If the number of arguments is not N, display a newline"
+is the rule candidates forget most, so every program exercise gets a case with
+too few arguments and one with too many.
+
+Avoid inputs whose correct behaviour the subject does not define — `ft_atoi` on
+something that overflows `int` is undefined, so the reference's answer there is
+arbitrary rather than authoritative, and a case built on it would fail correct
+solutions.
+
+- [ ] **Step 4: Run the suite**
+
+Run: `go test ./internal/grader/ -run 'TestEveryReference|TestMutated' -v`
+
+Expected on the first run: failures. Work through them exactly as in Task 7 —
+a failing reference means the driver or the metadata is wrong; a mutated
+reference that still passes means the cases do not reach the mutated path.
+Iterate until both are green across all 31 ready exercises.
+
+- [ ] **Step 5: Run everything**
+
+Run: `go test ./...`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add internal/catalog/exercises/
+git commit -m "feat(data): Level 2 drivers, cases and confirmed metadata
+
+Twelve of the nineteen are function exercises, including the ten across
+levels 2 to 4 whose subjects say prototyped rather than declared and so
+came back from the importer marked uncertain.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 16: Level 3 content
+
+**Files:**
+- Modify: `meta.yaml` in all 15 Level 3 exercise directories
+- Create: `driver.c` in the 5 function-kind directories
+- Create: `cases.txt` in all 15 directories
+
+**Interfaces:**
+- Consumes: Tasks 2, 6, 7.
+- Produces: 15 gradable exercises, so `GradableByLevel(3)` is no longer empty.
+
+- [ ] **Step 1: Confirm every meta.yaml**
+
+| Exercise | kind | prototype | allowed_functions |
+| --- | --- | --- | --- |
+| add_prime_sum | program | — | write, exit |
+| epur_str | program | — | write |
+| expand_str | program | — | write |
+| ft_atoi_base | function | `int ft_atoi_base(const char *str, int str_base);` | none |
+| ft_list_size | function | `int ft_list_size(t_list *begin_list);` | none |
+| ft_range | function | `int *ft_range(int start, int end);` | malloc |
+| ft_rrange | function | `int *ft_rrange(int start, int end);` | malloc |
+| hidenp | program | — | write |
+| lcm | function | `unsigned int lcm(unsigned int a, unsigned int b);` | none |
+| paramsum | program | — | write |
+| pgcd | program | — | printf, atoi, malloc, free |
+| print_hex | program | — | write |
+| rstr_capitalizer | program | — | write |
+| str_capitalizer | program | — | write |
+| tab_mult | program | — | write |
+
+`ft_list_size` ships a header upstream; its `meta.yaml` must carry
+`header: ft_list.h` so Task 10 copies it into the candidate's workspace.
+
+- [ ] **Step 2: Write the five drivers**
+
+`ft_range` and `ft_rrange` return an allocated array whose length is implied by
+the arguments, so the driver prints every element:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+int	*ft_range(int start, int end);
+
+int	main(int argc, char **argv)
+{
+	int	start;
+	int	end;
+	int	len;
+	int	i;
+	int	*range;
+
+	if (argc < 3)
+		return (1);
+	start = atoi(argv[1]);
+	end = atoi(argv[2]);
+	range = ft_range(start, end);
+	if (!range)
+	{
+		printf("(null)\n");
+		return (0);
+	}
+	if (start > end)
+		len = start - end + 1;
+	else
+		len = end - start + 1;
+	i = 0;
+	while (i < len)
+	{
+		printf("%d ", range[i]);
+		i++;
+	}
+	printf("|end\n");
+	return (0);
+}
+```
+
+`ft_list_size` is the first driver that must build a linked list. It includes
+the upstream header and links the list from argv:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include "ft_list.h"
+
+int	ft_list_size(t_list *begin_list);
+
+int	main(int argc, char **argv)
+{
+	t_list	*head;
+	t_list	*node;
+	int		i;
+
+	head = NULL;
+	i = argc - 1;
+	while (i >= 1)
+	{
+		node = malloc(sizeof(t_list));
+		node->data = argv[i];
+		node->next = head;
+		head = node;
+		i--;
+	}
+	printf("%d\n", ft_list_size(head));
+	return (0);
+}
+```
+
+Check the upstream header for the exact field names before writing this: the
+struct's members are what the driver must use, and they differ between the
+list exercises.
+
+- [ ] **Step 3: Write a case file for each of the 15**
+
+As Task 15's step 3. For `ft_range` and `ft_rrange` include `start > end`,
+`start == end`, and a negative span, all of which the subject defines.
+For `ft_list_size` include the empty list, which means running with no
+arguments.
+
+- [ ] **Step 4: Run the suite**
+
+Run: `go test ./internal/grader/ -run 'TestEveryReference|TestMutated' -v`
+Iterate until green across all 46 ready exercises.
+
+- [ ] **Step 5: Run everything**
+
+Run: `go test ./...`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add internal/catalog/exercises/
+git commit -m "feat(data): Level 3 drivers, cases and confirmed metadata
+
+Includes the first linked-list driver, which builds its list from argv
+using the header the exercise ships.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 17: Level 4 content
+
+The hardest set: two more linked-list exercises, one taking a function pointer,
+one taking a struct.
+
+**Files:**
+- Modify: `meta.yaml` in all 10 Level 4 exercise directories
+- Create: `driver.c` in the 7 function-kind directories
+- Create: `cases.txt` in all 10 directories
+
+**Interfaces:**
+- Consumes: Tasks 2, 6, 7.
+- Produces: 10 gradable exercises, so `GradableByLevel(4)` is no longer empty
+  and exam mode can run a complete four-level session.
+
+- [ ] **Step 1: Confirm every meta.yaml**
+
+| Exercise | kind | prototype | allowed_functions | header |
+| --- | --- | --- | --- | --- |
+| flood_fill | function | `void flood_fill(char **tab, t_point size, t_point begin);` | none | flood_fill.h |
+| fprime | program | — | printf, atoi | — |
+| ft_itoa | function | `char *ft_itoa(int nbr);` | malloc | — |
+| ft_list_foreach | function | `void ft_list_foreach(t_list *begin_list, void (*f)(void *));` | none | ft_list.h |
+| ft_list_remove_if | function | `void ft_list_remove_if(t_list **begin_list, void *data_ref, int (*cmp)());` | free | ft_list.h |
+| ft_split | function | `char **ft_split(char *str);` | malloc | — |
+| rev_wstr | program | — | write, malloc, free | — |
+| rostring | program | — | write, malloc, free | — |
+| sort_int_tab | function | `void sort_int_tab(int *tab, unsigned int size);` | none | — |
+| sort_list | function | `t_list *sort_list(t_list* lst, int (*cmp)(int, int));` | none | list.h |
+
+`flood_fill` and `sort_list` are two of the four subjects whose expected files
+are the glob `*.c, *.h`, so their `expected_file` must be set by hand to
+`flood_fill.c` and `sort_list.c`.
+
+- [ ] **Step 2: Write the seven drivers**
+
+`ft_split` returns a NULL-terminated array, so print one word per line with an
+end marker — without it, a split that returns an empty array and one that
+returns nothing look identical:
+
+```c
+#include <stdio.h>
+
+char	**ft_split(char *str);
+
+int	main(int argc, char **argv)
+{
+	char	**words;
+	int		i;
+
+	if (argc < 2)
+		return (1);
+	words = ft_split(argv[1]);
+	if (!words)
+	{
+		printf("(null)\n");
+		return (0);
+	}
+	i = 0;
+	while (words[i])
+	{
+		printf("[%s]\n", words[i]);
+		i++;
+	}
+	printf("count=%d\n", i);
+	return (0);
+}
+```
+
+`ft_list_foreach` takes a function pointer, so the driver supplies one that
+prints what it is given, making the traversal order observable:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include "ft_list.h"
+
+void	ft_list_foreach(t_list *begin_list, void (*f)(void *));
+
+void	print_data(void *data)
+{
+	printf("[%s]\n", (char *)data);
+}
+
+int	main(int argc, char **argv)
+{
+	t_list	*head;
+	t_list	*node;
+	int		i;
+
+	head = NULL;
+	i = argc - 1;
+	while (i >= 1)
+	{
+		node = malloc(sizeof(t_list));
+		node->data = argv[i];
+		node->next = head;
+		head = node;
+		i--;
+	}
+	ft_list_foreach(head, &print_data);
+	printf("|end\n");
+	return (0);
+}
+```
+
+`flood_fill` mutates the grid in place, so the driver builds the grid from
+argv, calls the function, and prints every row afterwards. Read
+`flood_fill.h` for the exact shape of `t_point` before writing it.
+
+`ft_list_remove_if` needs a `cmp` the driver supplies, and must print the list
+after removal. `sort_list` needs a `cmp` taking two ints. Check each
+exercise's own header for its struct's field names — they are not identical
+across the three list exercises.
+
+- [ ] **Step 3: Write a case file for each of the 10**
+
+As Task 15's step 3. For `ft_split` include repeated separators, leading and
+trailing separators, tabs and newlines as separators, a string of only
+separators, and the empty string. For `ft_itoa` include 0, a negative number,
+and `INT_MIN`, which is the boundary that breaks most implementations and which
+the subject does define.
+
+- [ ] **Step 4: Run the suite**
+
+Run: `go test ./internal/grader/ -run 'TestEveryReference|TestMutated' -v`
+Expected: green across all 56 exercises. `readyExercises` should now return 56.
+
+- [ ] **Step 5: Confirm every level is drawable**
+
+Add to `internal/catalog/load_test.go`:
+
+```go
+func TestEveryLevelHasGradableExercises(t *testing.T) {
+	// An exam draws one exercise per level. A level with nothing gradable
+	// would make exam mode refuse to start.
+	c, err := Embedded()
+	if err != nil {
+		t.Fatalf("Embedded() error = %v", err)
+	}
+	for level := 1; level <= 4; level++ {
+		if n := len(c.GradableByLevel(level)); n == 0 {
+			t.Errorf("level %d has no gradable exercises; exam mode cannot start", level)
+		}
+	}
+	if n := len(c.All()); n != 56 {
+		t.Errorf("All() = %d exercises, want 56", n)
+	}
+}
+```
+
+Run: `go test ./internal/catalog/ -v`
+Expected: PASS.
+
+- [ ] **Step 6: Run everything**
+
+Run: `go test ./...`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add internal/catalog/
+git commit -m "feat(data): Level 4 drivers and cases complete all 56 exercises
+
+Every level now has gradable exercises, so an exam can run a full four
+level session. The new catalog test fails if any level empties out,
+which would silently make exam mode refuse to start.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
