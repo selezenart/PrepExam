@@ -31,7 +31,11 @@ This plan delivers the complete application: every engine, both modes, the relea
 
 Task 7 deliberately authors Level 1 alone and proves the entire pipeline against those 12 real exercises before the remaining 44 drivers are written — a driver bug found at exercise 3 is far cheaper than the same bug found at exercise 50. Tasks 15, 16 and 17 then author Levels 2, 3 and 4 by repeating that pattern.
 
-**Execution order: 1-7, then 15, 16, 17, then 8-14.** The content tasks run before the interface tasks because an exam draws one exercise from each of the four levels: until every level has gradable content, exam mode cannot start, and Tasks 11 to 13 could not be exercised against a working exam.
+**Execution order: 1-7, then 8-14, then 15, 16, 17.** The application is built and made runnable before the bulk of the exercise content is authored, so it can be used and judged early rather than only at the end.
+
+Task 7 still precedes the interface tasks: it creates `internal/catalog/embed.go` and moves the exercise tree under `internal/catalog/` for `go:embed`, which Task 13's entry point needs, and it supplies the 12 Level 1 exercises that give practice mode real content.
+
+**Consequence the interface must handle.** An exam draws one exercise from each of the four levels, so until Tasks 15-17 land, `GradableByLevel` returns nothing for levels 2, 3 and 4 and `session.NewExam` correctly refuses to start. Between Task 13 and Task 17 the application therefore ships with practice mode fully working and exam mode unavailable. That is a state a user will actually see, so it must be presented deliberately: the menu tells them which levels have content and why exam mode is not yet offered. It must never surface as a raw error or a crash.
 
 ---
 
@@ -4050,6 +4054,34 @@ func (m Model) View() string {
 	return ""
 }
 
+// examAvailable reports whether every level has at least one gradable
+// exercise. An exam draws one from each, so a single empty level makes the
+// mode impossible.
+func (m Model) examAvailable() bool {
+	for level := 1; level <= 4; level++ {
+		if len(m.deps.Catalog.GradableByLevel(level)) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// examUnavailableReason explains, in the user's terms, why exam mode is not
+// offered yet and what is available instead.
+func (m Model) examUnavailableReason() string {
+	var ready []string
+	for level := 1; level <= 4; level++ {
+		if len(m.deps.Catalog.GradableByLevel(level)) > 0 {
+			ready = append(ready, fmt.Sprintf("%d", level))
+		}
+	}
+	if len(ready) == 0 {
+		return "no exercises are gradable yet"
+	}
+	return "needs all four levels; only " + strings.Join(ready, ", ") +
+		" ready so far — practice mode works now"
+}
+
 // startExam draws the first exercise and switches to the exam screen.
 func (m Model) startExam() (Model, tea.Cmd) {
 	pools := map[int][]string{}
@@ -4111,6 +4143,12 @@ func (m Model) updateMenu(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "q", "ctrl+c", "esc":
 		return m, tea.Quit
 	case "1":
+		// Exam mode needs a gradable exercise at every level. Until the
+		// remaining content lands, say so plainly rather than failing.
+		if !m.examAvailable() {
+			m.status = m.examUnavailableReason()
+			return m, nil
+		}
 		return m.startExam()
 	case "2":
 		m.practice = m.deps.Catalog.All()
@@ -4137,7 +4175,12 @@ func (m Model) viewMenu() string {
 	}
 	b.WriteString(styleDim.Render(fmt.Sprintf("%d of %d exercises passed at least once", passed, total)) + "\n\n")
 
-	b.WriteString(styleKey.Render("1") + "  Exam        three hours, one exercise per level, 100 points to pass\n")
+	if m.examAvailable() {
+		b.WriteString(styleKey.Render("1") + "  Exam        three hours, one exercise per level, 100 points to pass\n")
+	} else {
+		b.WriteString(styleDim.Render("1  Exam        ") +
+			styleWarn.Render(m.examUnavailableReason()) + "\n")
+	}
 	b.WriteString(styleKey.Render("2") + "  Practice    pick any exercise, no clock, solutions available\n")
 	b.WriteString(styleKey.Render("3") + "  About\n")
 	b.WriteString(styleKey.Render("q") + "  Quit\n")
