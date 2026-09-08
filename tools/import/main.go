@@ -1,12 +1,12 @@
 // Command import converts the vendored upstream exercise repository into the
-// data/exercises tree the application embeds.
+// internal/catalog/exercises tree the application embeds.
 //
 // It is run by hand, and its output is committed. Two fields it writes are
 // guesses that a human must confirm: kind, because a phrase heuristic
 // classifies only 43 of 56 subjects, and expected_file for the four subjects
 // whose expected files are a glob.
 //
-// Usage: go run ./tools/import -src third_party/exam_rank_02 -dst data/exercises
+// Usage: go run ./tools/import -src third_party/exam_rank_02 -dst internal/catalog/exercises
 package main
 
 import (
@@ -24,7 +24,7 @@ import (
 
 func main() {
 	src := flag.String("src", "third_party/exam_rank_02", "vendored upstream repository")
-	dst := flag.String("dst", "data/exercises", "output directory")
+	dst := flag.String("dst", "internal/catalog/exercises", "output directory")
 	flag.Parse()
 
 	if err := run(*src, *dst); err != nil {
