@@ -36,9 +36,23 @@ type Exam struct {
 	Cleared         int       `json:"cleared"`
 	History         []Attempt `json:"history"`
 
-	pools map[int][]string
-	rng   *rand.Rand
+	pools        map[int][]string
+	rng          *rand.Rand
+	substitution *Substitution
 }
+
+// Substitution describes an exercise Decode had to swap in because the one
+// saved in state no longer exists in its level's pool — for example, the
+// catalog changed between saves. It is nil on a normal resume where nothing
+// had to change.
+type Substitution struct {
+	From string
+	To   string
+}
+
+// Substitution reports the swap Decode made to resume this exam, or nil if
+// none was needed.
+func (e *Exam) Substitution() *Substitution { return e.substitution }
 
 // NewExam starts a run, drawing the first exercise from the Level 1 pool.
 //
@@ -46,10 +60,8 @@ type Exam struct {
 // least one: an exam that cannot draw an exercise for a level could never be
 // passed, and failing at the start says so more clearly than failing later.
 func NewExam(cfg store.Config, pools map[int][]string, rng *rand.Rand, now time.Time) (*Exam, error) {
-	for level := 1; level <= levels; level++ {
-		if len(pools[level]) == 0 {
-			return nil, fmt.Errorf("level %d has no exercises to draw from", level)
-		}
+	if err := validatePools(pools, 1); err != nil {
+		return nil, err
 	}
 	e := &Exam{
 		StartedAt:    now,
@@ -57,7 +69,7 @@ func NewExam(cfg store.Config, pools map[int][]string, rng *rand.Rand, now time.
 		PerLevel:     cfg.PointsPerExercise,
 		PassMark:     cfg.PassMark,
 		CurrentLevel: 1,
-		pools:        pools,
+		pools:        clonePools(pools),
 		rng:          rng,
 	}
 	e.draw()
@@ -66,29 +78,75 @@ func NewExam(cfg store.Config, pools map[int][]string, rng *rand.Rand, now time.
 
 // Attach restores the pools and randomness after an exam has been decoded from
 // saved state, which cannot carry either.
+//
+// pools is copied rather than aliased: a caller that goes on to mutate the
+// map or its slices must not be able to reach back in and change what the
+// exam draws from.
 func (e *Exam) Attach(pools map[int][]string, rng *rand.Rand) {
-	e.pools, e.rng = pools, rng
+	e.pools, e.rng = clonePools(pools), rng
+}
+
+// validatePools checks that every level from start through the last has at
+// least one exercise to draw from. A level with none — including one not yet
+// reached — could never be drawn from when the run gets there, and failing
+// now says so far more clearly than stranding the run partway through.
+func validatePools(pools map[int][]string, start int) error {
+	for level := start; level <= levels; level++ {
+		if len(pools[level]) == 0 {
+			return fmt.Errorf("level %d has no exercises to draw from", level)
+		}
+	}
+	return nil
+}
+
+// clonePools makes an independent copy of pools, so a caller mutating the map
+// or its slices after handing them to an Exam cannot alter what it draws
+// from.
+func clonePools(pools map[int][]string) map[int][]string {
+	out := make(map[int][]string, len(pools))
+	for level, names := range pools {
+		cp := make([]string, len(names))
+		copy(cp, names)
+		out[level] = cp
+	}
+	return out
+}
+
+// contains reports whether name appears in pool.
+func contains(pool []string, name string) bool {
+	for _, p := range pool {
+		if p == name {
+			return true
+		}
+	}
+	return false
 }
 
 // draw picks a fresh exercise from the current level's pool, avoiding the one
-// just attempted where the pool is big enough to allow it.
+// just attempted where the pool offers an alternative.
+//
+// This scans for candidates rather than resampling until a different name
+// turns up: resampling would spin forever on a pool whose only distinct
+// entry equals the one just attempted (e.g. duplicate names in the pool),
+// which is exactly the wrong place to hang — mid-exam, against the clock.
 func (e *Exam) draw() {
 	pool := e.pools[e.CurrentLevel]
 	if len(pool) == 0 {
 		e.CurrentExercise = ""
 		return
 	}
-	if len(pool) == 1 {
-		e.CurrentExercise = pool[0]
-		return
-	}
-	for {
-		candidate := pool[e.rng.Intn(len(pool))]
-		if candidate != e.CurrentExercise {
-			e.CurrentExercise = candidate
-			return
+	candidates := make([]string, 0, len(pool))
+	for _, name := range pool {
+		if name != e.CurrentExercise {
+			candidates = append(candidates, name)
 		}
 	}
+	if len(candidates) == 0 {
+		// Every entry equals the one just attempted (a pool of one, or of
+		// duplicates); there is nothing else to offer.
+		candidates = pool
+	}
+	e.CurrentExercise = candidates[e.rng.Intn(len(candidates))]
 }
 
 // Record notes the outcome of grading the current exercise. Passing clears the
@@ -144,8 +202,13 @@ func (e *Exam) Over(now time.Time) bool {
 	return e.Cleared >= levels || e.Remaining(now) == 0
 }
 
-// Attempts is the history of graded submissions, oldest first.
-func (e *Exam) Attempts() []Attempt { return e.History }
+// Attempts is the history of graded submissions, oldest first. It returns a
+// copy: mutating the result must not reach back into the exam's own state.
+func (e *Exam) Attempts() []Attempt {
+	out := make([]Attempt, len(e.History))
+	copy(out, e.History)
+	return out
+}
 
 // Encode serialises an exam for storage. The draw pools and the random source
 // are deliberately left out: pools are rebuilt from the catalog on load, so a
@@ -164,6 +227,24 @@ func Encode(e *Exam) (json.RawMessage, error) {
 // The start time is restored as it was, so the clock carries on from where it
 // stopped. Restarting it would turn quitting and reopening into a way to buy
 // unlimited time.
+//
+// The freshly attached pools are re-validated against the exam being
+// resumed, because the catalog — and so the pools rebuilt from it — can have
+// changed since the exam was saved:
+//
+//   - If the current level, or one not yet reached, now has no exercises at
+//     all, resuming can only strand the run later: Decode fails outright,
+//     the same way NewExam refuses to start such a run in the first place.
+//   - If the level's pool is otherwise healthy but no longer contains the
+//     saved exercise (renamed or removed), the run is still completable, so
+//     Decode redraws rather than erroring — discarding a run in progress
+//     over one renamed exercise would be disproportionate. The swap is
+//     recorded on Substitution, so a caller can tell the candidate their
+//     exercise changed rather than silently handing them a different
+//     problem than the one their in-progress work was written for.
+//
+// A finished exam (all four levels cleared) has nothing left to draw, so
+// neither check applies to it.
 func Decode(raw json.RawMessage, pools map[int][]string, rng *rand.Rand) (*Exam, error) {
 	var e Exam
 	if err := json.Unmarshal(raw, &e); err != nil {
@@ -172,6 +253,16 @@ func Decode(raw json.RawMessage, pools map[int][]string, rng *rand.Rand) (*Exam,
 	if e.CurrentLevel < 1 || e.CurrentLevel > levels {
 		return nil, fmt.Errorf("saved exam has an impossible level %d", e.CurrentLevel)
 	}
+	if e.CurrentExercise != "" {
+		if err := validatePools(pools, e.CurrentLevel); err != nil {
+			return nil, err
+		}
+	}
 	e.Attach(pools, rng)
+	if e.CurrentExercise != "" && !contains(e.pools[e.CurrentLevel], e.CurrentExercise) {
+		from := e.CurrentExercise
+		e.draw()
+		e.substitution = &Substitution{From: from, To: e.CurrentExercise}
+	}
 	return &e, nil
 }
