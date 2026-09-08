@@ -1510,8 +1510,6 @@ Create `internal/grader/builtins.go`:
 ```go
 package grader
 
-import "runtime"
-
 // compilerEmitted lists symbols a compiler synthesises from code that never
 // names them: memcpy and memset for aggregate assignment and large
 // initialisers, the stack-protector hooks, and the runtime entry points a
@@ -1521,27 +1519,42 @@ import "runtime"
 // something they did not write, so they are subtracted before the check. The
 // lists differ by platform because clang on macOS and gcc on Linux emit
 // different names.
-var compilerEmitted = func() map[string]bool {
-	shared := []string{
-		"memcpy", "memmove", "memset", "bcopy",
-		"__stack_chk_fail", "__stack_chk_guard",
-	}
-	platform := map[string][]string{
-		"darwin": {
-			"___stack_chk_fail", "___stack_chk_guard",
-			"dyld_stub_binder", "__Unwind_Resume",
-		},
-		"linux": {
-			"__stack_chk_fail_local", "_GLOBAL_OFFSET_TABLE_",
-			"__gmon_start__", "_Unwind_Resume",
-		},
-	}
+// Every entry below is written in NORMALIZED form -- the form normalizeSymbol
+// produces after stripping darwin's ABI underscore -- because Forbidden
+// compares against already-normalized symbols. An entry written in raw darwin
+// form can never match what a real darwin build produces.
+//
+// This bit me: an earlier draft listed ___stack_chk_fail and __Unwind_Resume
+// in raw form. The first two were merely dead, but __Unwind_Resume was a live
+// false-failure on macOS -- a candidate emitting an unwind resume would be
+// told they called a forbidden function they never wrote. Task 5's
+// reachability test exists to make that class of mistake fail loudly.
+var compilerEmittedShared = []string{
+	"memcpy", "memmove", "memset", "bcopy",
+	"__stack_chk_fail", "__stack_chk_guard",
+	// _Unwind_Resume is the C identifier on both platforms. Linux nm prints it
+	// unchanged; darwin nm adds one ABI underscore, which normalizeSymbol
+	// strips back to this. One shared entry covers both.
+	"_Unwind_Resume",
+}
+
+var compilerEmittedPlatform = map[string][]string{
+	// __stack_chk_fail/_guard are NOT repeated here: their C identifiers
+	// already carry two underscores, darwin nm shows three, normalizeSymbol
+	// strips one, leaving the two-underscore shared entry above.
+	"darwin": {"dyld_stub_binder"},
+	"linux":  {"__stack_chk_fail_local", "_GLOBAL_OFFSET_TABLE_", "__gmon_start__"},
+}
+
+// compilerEmittedFor takes goos rather than reading runtime.GOOS so a test can
+// check a specific platform's allowlist regardless of where it runs.
+func compilerEmittedFor(goos string) map[string]bool {
 	set := make(map[string]bool)
-	for _, s := range append(shared, platform[runtime.GOOS]...) {
+	for _, s := range append(append([]string{}, compilerEmittedShared...), compilerEmittedPlatform[goos]...) {
 		set[s] = true
 	}
 	return set
-}()
+}
 ```
 
 - [ ] **Step 4: Write the symbol reader**
