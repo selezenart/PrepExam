@@ -1,0 +1,4 @@
+{"args": ["hello"]}
+{"args": [""]}
+{"args": ["multi\nline"]}
+{"args": ["trailing space "]}
