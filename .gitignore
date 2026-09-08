@@ -1,3 +1,4 @@
 /dist/
 /rendu/
 *.o
+/sdd-state.tgz
