@@ -18,13 +18,18 @@ import (
 var compileFlags = []string{"-Wall", "-Wextra", "-Werror"}
 
 // Grader compiles and runs candidate solutions against the reference.
+//
+// NM is not a field here: the only place that runs nm is objectSymbols
+// (symbols.go), a package-level function that hardcodes "nm" directly and is
+// also called straight from symbols_test.go. A Grader.NM field would not
+// reach that call without changing objectSymbols' already-committed
+// signature, so it would be configuration that silently did nothing.
 type Grader struct {
 	CC string
-	NM string
 }
 
 // New returns a Grader using the system toolchain.
-func New() *Grader { return &Grader{CC: "cc", NM: "nm"} }
+func New() *Grader { return &Grader{CC: "cc"} }
 
 // CheckToolchain reports whether the tools the grader needs are present.
 func CheckToolchain() error {
@@ -43,6 +48,15 @@ func CheckToolchain() error {
 // an unwritable temporary directory. A candidate whose code is wrong is not an
 // error: it is a Verdict that did not pass.
 func (g *Grader) Grade(ctx context.Context, ex catalog.Exercise, srcPath string) (Verdict, error) {
+	// An exercise with no cases (every level 2-4 exercise, until its driver
+	// and cases are authored) has nothing to compare against. Passing one
+	// through anyway would award every candidate a free OK, so this is
+	// treated as grading not being possible at all — a defect in the
+	// exercise's data, never the candidate's fault — rather than as a
+	// verdict.
+	if !ex.Gradable() {
+		return Verdict{}, fmt.Errorf("exercise %s is not gradable yet: missing cases or driver", ex.Name)
+	}
 	if _, err := os.ReadFile(srcPath); err != nil {
 		return Verdict{
 			Status:  StatusMissingFile,

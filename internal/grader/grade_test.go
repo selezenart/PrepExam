@@ -158,6 +158,35 @@ func TestGradeProgramKindAcceptsTheReference(t *testing.T) {
 	}
 }
 
+func TestGradeReportsATimeout(t *testing.T) {
+	ex := strlenExercise()
+	ex.TimeoutMS = 100 // small on purpose: this test must stay fast.
+	v := gradeSource(t, ex, "int ft_strlen(char *str){(void)str;while(1);}")
+	if v.Status != StatusTimeout {
+		t.Errorf("Status = %q, want %q (summary: %s)", v.Status, StatusTimeout, v.Summary)
+	}
+}
+
+func TestGradeErrorsOnAnUngradableExercise(t *testing.T) {
+	// Every level 2-4 exercise is currently in this state: the importer
+	// generated it with no cases.txt, and its driver and cases are written
+	// by hand in a later task. Grading it must never quietly award a pass.
+	ex := strlenExercise()
+	ex.Cases = nil
+	dir := t.TempDir()
+	path := filepath.Join(dir, ex.ExpectedFile)
+	if err := os.WriteFile(path, []byte(ex.Reference), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v, err := New().Grade(context.Background(), ex, path)
+	if err == nil {
+		t.Fatal("Grade() error = nil, want an error for an exercise with no cases")
+	}
+	if v.Passed() {
+		t.Errorf("Grade() returned a passing verdict for an ungradable exercise: %+v", v)
+	}
+}
+
 func TestGradeProgramKindRejectsAWrongAnswer(t *testing.T) {
 	ex := rot13Exercise()
 	// rot 12 instead of rot 13.
