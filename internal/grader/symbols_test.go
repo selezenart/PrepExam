@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"testing"
 )
 
@@ -16,7 +15,7 @@ func TestParseNMOutput(t *testing.T) {
 		"                 U printf\n" +
 		"0000000000000000 T ft_strlen\n" +
 		"                 U write\n"
-	undefined, defined := parseNMOutput(out)
+	undefined, defined := parseNMOutput(out, "linux")
 	wantU := []string{"memcpy", "printf", "write"}
 	if !reflect.DeepEqual(undefined, wantU) {
 		t.Errorf("undefined = %v, want %v", undefined, wantU)
@@ -28,19 +27,44 @@ func TestParseNMOutput(t *testing.T) {
 }
 
 func TestParseNMOutputStripsDarwinUnderscore(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		// normalizeSymbol only strips the underscore macOS's nm adds; on
-		// every other platform it is a no-op by design, so this darwin path
-		// cannot be exercised on this machine without faking runtime.GOOS.
-		t.Skip("darwin-only: normalizeSymbol strips the leading underscore only on darwin")
-	}
+	// goos is passed explicitly as "darwin" so this exercises the stripping
+	// path deterministically regardless of which platform the test binary
+	// actually runs on.
 	out := "                 U _printf\n0000000000000000 T _main\n"
-	undefined, defined := parseNMOutput(out)
+	undefined, defined := parseNMOutput(out, "darwin")
 	if !reflect.DeepEqual(undefined, []string{"printf"}) {
 		t.Errorf("undefined = %v, want [printf]", undefined)
 	}
 	if !reflect.DeepEqual(defined, []string{"main"}) {
 		t.Errorf("defined = %v, want [main]", defined)
+	}
+}
+
+func TestForbiddenIgnoresDarwinCompilerEmittedSymbols(t *testing.T) {
+	// Raw nm output as real darwin nm prints it: every C symbol carries the
+	// Mach-O ABI's one extra leading underscore on top of its actual name.
+	// __stack_chk_fail and __stack_chk_guard are C identifiers that already
+	// have two leading underscores, so darwin nm shows three;
+	// dyld_stub_binder has none, so darwin nm shows one; _Unwind_Resume has
+	// one, so darwin nm shows two. printf, an ordinary libc call, also picks
+	// up the one ABI underscore.
+	out := "                 U _memcpy\n" +
+		"                 U _memset\n" +
+		"                 U ___stack_chk_fail\n" +
+		"                 U ___stack_chk_guard\n" +
+		"                 U _dyld_stub_binder\n" +
+		"                 U __Unwind_Resume\n" +
+		"                 U _printf\n" +
+		"0000000000000000 T _ft_thing\n"
+	undefined, _ := parseNMOutput(out, "darwin")
+
+	// forbidden, not the exported Forbidden, so the check runs against
+	// darwin's compiler-emitted set regardless of the real runtime.GOOS this
+	// test binary happens to run under.
+	got := forbidden(undefined, nil, "darwin")
+	want := []string{"printf"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("forbidden() = %v, want %v; a darwin compilerEmitted entry is written in a form normalizeSymbol never produces", got, want)
 	}
 }
 
