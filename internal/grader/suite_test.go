@@ -130,27 +130,41 @@ func mutate(src string) (string, bool) {
 	return "", false
 }
 
-// maskComments returns src with the interior of every /* ... */ comment
-// overwritten with spaces (newlines preserved), so byte offsets found in the
-// result still address the same bytes in src.
+// maskComments returns src with the interior of every /* ... */ and //...
+// comment overwritten with spaces (newlines preserved), so byte offsets
+// found in the result still address the same bytes in src.
+//
+// It has no awareness of string or character literals, so a reference that
+// embedded "/*" or "//" inside a string literal would be mis-treated as
+// starting a comment there. None of the 56 vendored reference.c files do
+// that, so literal-aware parsing is not built here.
 func maskComments(src string) string {
 	var b strings.Builder
 	b.Grow(len(src))
-	inComment := false
+	inBlock, inLine := false, false
 	for i := 0; i < len(src); i++ {
 		switch {
-		case !inComment && i+1 < len(src) && src[i] == '/' && src[i+1] == '*':
-			inComment = true
-			b.WriteString("  ")
-			i++
-		case inComment && i+1 < len(src) && src[i] == '*' && src[i+1] == '/':
-			inComment = false
-			b.WriteString("  ")
-			i++
-		case inComment && src[i] == '\n':
+		case inLine && src[i] == '\n':
+			inLine = false
 			b.WriteByte('\n')
-		case inComment:
+		case inLine:
 			b.WriteByte(' ')
+		case inBlock && i+1 < len(src) && src[i] == '*' && src[i+1] == '/':
+			inBlock = false
+			b.WriteString("  ")
+			i++
+		case inBlock && src[i] == '\n':
+			b.WriteByte('\n')
+		case inBlock:
+			b.WriteByte(' ')
+		case i+1 < len(src) && src[i] == '/' && src[i+1] == '*':
+			inBlock = true
+			b.WriteString("  ")
+			i++
+		case i+1 < len(src) && src[i] == '/' && src[i+1] == '/':
+			inLine = true
+			b.WriteString("  ")
+			i++
 		default:
 			b.WriteByte(src[i])
 		}
