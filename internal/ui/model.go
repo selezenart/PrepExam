@@ -65,6 +65,7 @@ type Model struct {
 	err    error
 	now    time.Time
 	width  int
+	height int
 }
 
 // tickMsg drives the countdown.
@@ -104,6 +105,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 		return m, nil
 
 	case tickMsg:
