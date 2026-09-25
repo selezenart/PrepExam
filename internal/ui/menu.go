@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,7 +35,12 @@ func (m Model) updateMenu(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.status = ""
 		return m.startExam()
 	case "2":
+		// Grouped by level so the list reads in exam order. All is sorted by
+		// name and the sort is stable, so names stay ordered within a level.
 		m.practice = m.deps.Catalog.All()
+		sort.SliceStable(m.practice, func(i, j int) bool {
+			return m.practice[i].Level < m.practice[j].Level
+		})
 		m.cursor = 0
 		m.screen = screenPractice
 		return m, nil
