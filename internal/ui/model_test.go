@@ -386,3 +386,21 @@ func TestAnExamNoticeDoesNotFollowIntoPractice(t *testing.T) {
 		t.Errorf("the practice screen shows the exam's notice:\n%s", practice.View())
 	}
 }
+
+func TestPracticeListIsSortedByLevel(t *testing.T) {
+	m := newTestModel(t)
+	next, _ := m.Update(key("2"))
+	view := next.View()
+	// testCatalog's names sort alphabetically as epur_str, ft_atoi,
+	// ft_split, ft_strlen; by level they are ft_strlen(1), ft_atoi(2),
+	// epur_str(3), ft_split(4).
+	order := []string{"ft_strlen", "ft_atoi", "epur_str", "ft_split"}
+	last := -1
+	for _, name := range order {
+		i := strings.Index(view, name)
+		if i < last {
+			t.Fatalf("%s is out of level order:\n%s", name, view)
+		}
+		last = i
+	}
+}
