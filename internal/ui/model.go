@@ -60,12 +60,13 @@ type Model struct {
 	revealed bool
 	spanish  bool
 
-	status string
-	notice string // a one-off message shown on the exercise screen
-	err    error
-	now    time.Time
-	width  int
-	height int
+	status         string
+	confirmRestart bool   // the next 1 on the menu abandons the exam in flight
+	notice         string // a one-off message shown on the exercise screen
+	err            error
+	now            time.Time
+	width          int
+	height         int
 }
 
 // tickMsg drives the countdown.

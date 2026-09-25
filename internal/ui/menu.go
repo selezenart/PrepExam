@@ -9,6 +9,10 @@ import (
 )
 
 func (m Model) updateMenu(msg tea.KeyMsg) (Model, tea.Cmd) {
+	if msg.String() != "1" {
+		m.confirmRestart = false
+		m.status = ""
+	}
 	switch msg.String() {
 	case "q", "ctrl+c", "esc":
 		return m, tea.Quit
@@ -19,6 +23,15 @@ func (m Model) updateMenu(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.status = m.examUnavailableReason()
 			return m, nil
 		}
+		// A new exam replaces the one in flight, and there is no getting
+		// it back, so that takes a second press.
+		if m.exam != nil && !m.exam.Over(time.Now()) && !m.confirmRestart {
+			m.confirmRestart = true
+			m.status = "an exam is in progress: press 1 again to abandon it and start over, or c to resume"
+			return m, nil
+		}
+		m.confirmRestart = false
+		m.status = ""
 		return m.startExam()
 	case "2":
 		m.practice = m.deps.Catalog.All()
@@ -65,6 +78,9 @@ func (m Model) viewMenu() string {
 	b.WriteString(styleKey.Render("3") + "  About\n")
 	b.WriteString(styleKey.Render("q") + "  Quit\n")
 
+	if m.status != "" {
+		b.WriteString("\n" + styleWarn.Render(m.status) + "\n")
+	}
 	if m.err != nil {
 		b.WriteString("\n" + styleKO.Render("error: "+m.err.Error()) + "\n")
 	}
