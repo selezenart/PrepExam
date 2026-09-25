@@ -327,3 +327,23 @@ func TestPracticeListScrollsToKeepTheCursorOnScreen(t *testing.T) {
 		t.Errorf("the key hints scrolled away:\n%s", view)
 	}
 }
+
+func TestStartingAnExamOverAnInFlightOneAsksFirst(t *testing.T) {
+	m := newTestModel(t)
+	exam, _ := m.Update(key("1"))
+	menu, _ := exam.Update(key("q"))
+	first := menu.exam
+
+	warned, _ := menu.Update(key("1"))
+	if warned.screen != screenMenu || warned.exam != first {
+		t.Fatal("one keypress discarded the exam in progress")
+	}
+	if !strings.Contains(warned.View(), "again") {
+		t.Errorf("the menu does not explain how to confirm:\n%s", warned.View())
+	}
+
+	restarted, _ := warned.Update(key("1"))
+	if restarted.screen != screenExam || restarted.exam == first {
+		t.Error("confirming did not start a new exam")
+	}
+}
