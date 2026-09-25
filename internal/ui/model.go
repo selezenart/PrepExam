@@ -58,7 +58,6 @@ type Model struct {
 	verdict  *grader.Verdict
 	grading  bool
 	revealed bool
-	spanish  bool
 
 	status         string
 	confirmRestart bool   // the next 1 on the menu abandons the exam in flight
@@ -244,7 +243,6 @@ func (m Model) loadCurrent() (Model, tea.Cmd) {
 	m.current = ex
 	m.verdict = nil
 	m.revealed = false
-	m.spanish = false
 	m.err = nil
 	path, err := prepareWorkspace(m.deps.Root, ex)
 	if err != nil {

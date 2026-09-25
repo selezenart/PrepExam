@@ -49,11 +49,6 @@ func (m Model) updateExercise(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "x":
-		if m.screen == screenExercise && m.current.Spanish != "" {
-			m.spanish = !m.spanish
-		}
-		return m, nil
 	}
 	return m, nil
 }
@@ -149,9 +144,6 @@ func (m Model) viewExercise() string {
 		b.WriteString("\n" + styleWarn.Render("reference solution") + "\n")
 		b.WriteString(styleBox.Render(strings.TrimSpace(m.current.Reference)) + "\n")
 	}
-	if m.spanish {
-		b.WriteString("\n" + styleBox.Render(strings.TrimSpace(m.current.Spanish)) + "\n")
-	}
 
 	b.WriteString("\n" + m.keyHints())
 	return b.String()
@@ -164,9 +156,6 @@ func (m Model) keyHints() string {
 	}
 	if m.screen == screenExercise {
 		hints = append(hints, styleKey.Render("r")+" solution")
-		if m.current.Spanish != "" {
-			hints = append(hints, styleKey.Render("x")+" explicación")
-		}
 	}
 	hints = append(hints, styleKey.Render("q")+" back")
 	return styleDim.Render(strings.Join(hints, "   "))

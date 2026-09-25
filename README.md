@@ -72,7 +72,7 @@ All 56 exercises across the four levels are gradable.
 
 ## Credit
 
-Exercise subjects, the Spanish explainers, and the reference solutions come
+Exercise subjects and the reference solutions come
 from [alexhiguera/Exam_Rank_02_42_School](https://github.com/alexhiguera/Exam_Rank_02_42_School),
 MIT licensed, Copyright (c) 2026 Alex Higuera. The upstream licence is kept at
 `third_party/exam_rank_02/LICENSE`.

@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"io/fs"
 	"testing"
 	"testing/fstest"
 )
@@ -147,5 +148,20 @@ func TestEveryLevelHasGradableExercises(t *testing.T) {
 	}
 	if n := len(c.All()); n != 56 {
 		t.Errorf("All() = %d exercises, want 56", n)
+	}
+}
+
+func TestTheEmbeddedCatalogIsEnglishOnly(t *testing.T) {
+	err := fs.WalkDir(EmbeddedFS(), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Name() == "spanish.md" {
+			t.Errorf("%s is still embedded; the trainer is English only", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
