@@ -117,7 +117,9 @@ func (m Model) viewExercise() string {
 		b.WriteString(styleTitle.Render(fmt.Sprintf("%s   level %d", m.current.Name, m.current.Level)) + "\n\n")
 	}
 
-	if m.notice != "" {
+	// Notices are about the exam (a swapped exercise, the last one graded),
+	// so they never show over a practice exercise.
+	if m.notice != "" && m.screen == screenExam {
 		b.WriteString(styleWarn.Render(m.notice) + "\n\n")
 	}
 
