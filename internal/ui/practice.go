@@ -56,9 +56,12 @@ func (m Model) updatePractice(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 func (m Model) viewPractice() string {
 	var b strings.Builder
-	b.WriteString(styleTitle.Render("Practice") + "\n\n")
+	b.WriteString(styleTitle.Render("Practice") + "  " +
+		styleDim.Render(fmt.Sprintf("%d/%d", m.cursor+1, len(m.practice))) + "\n\n")
 
-	for i, ex := range m.practice {
+	first, last := m.practiceWindow()
+	for i := first; i < last; i++ {
+		ex := m.practice[i]
 		marker := "  "
 		if i == m.cursor {
 			marker = styleKey.Render("> ")
@@ -80,4 +83,24 @@ func (m Model) viewPractice() string {
 			styleKey.Render("w")+" drill weakest   "+
 			styleKey.Render("q")+" back"))
 	return b.String()
+}
+
+// practiceWindow is the slice of the list that fits the terminal, positioned
+// so the cursor stays on screen. The title and key hints take four lines.
+func (m Model) practiceWindow() (first, last int) {
+	rows := m.height - 4
+	if m.height == 0 || rows >= len(m.practice) {
+		return 0, len(m.practice)
+	}
+	if rows < 1 {
+		rows = 1
+	}
+	first = m.cursor - rows/2
+	if first < 0 {
+		first = 0
+	}
+	if first+rows > len(m.practice) {
+		first = len(m.practice) - rows
+	}
+	return first, first + rows
 }

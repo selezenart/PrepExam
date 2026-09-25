@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
@@ -289,5 +290,40 @@ func TestAGradingErrorIsShownOnTheExerciseScreen(t *testing.T) {
 	next, _ := exam.Update(gradedMsg{err: errors.New("cc not found")})
 	if !strings.Contains(next.View(), "cc not found") {
 		t.Errorf("a grading error was swallowed:\n%s", next.View())
+	}
+}
+
+func TestPracticeListScrollsToKeepTheCursorOnScreen(t *testing.T) {
+	fsys := fstest.MapFS{}
+	for i := 0; i < 40; i++ {
+		dir := fmt.Sprintf("exercises/ex_%02d/", i)
+		fsys[dir+"meta.yaml"] = &fstest.MapFile{Data: []byte(fmt.Sprintf(
+			"name: ex_%02d\nlevel: 1\nkind: program\nexpected_file: ex_%02d.c\nallowed_functions: []\nprototype: \"\"\n", i, i))}
+		fsys[dir+"subject.md"] = &fstest.MapFile{Data: []byte("s")}
+		fsys[dir+"reference.c"] = &fstest.MapFile{Data: []byte("int main(void){return 0;}")}
+	}
+	c, err := catalog.Load(fsys)
+	if err != nil {
+		t.Fatalf("catalog.Load() error = %v", err)
+	}
+	state, _ := store.Load(t.TempDir())
+	m := New(Deps{
+		Catalog: c, Grader: grader.New(), Config: store.DefaultConfig(),
+		State: state, StateDir: t.TempDir(), Root: t.TempDir(),
+	})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	m, _ = m.Update(key("2"))
+	for i := 0; i < 30; i++ {
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	view := m.View()
+	if lines := strings.Count(view, "\n") + 1; lines > 20 {
+		t.Errorf("the practice list is %d lines tall on a 20 line terminal", lines)
+	}
+	if !strings.Contains(view, "ex_30") {
+		t.Errorf("the selected exercise ex_30 is off screen:\n%s", view)
+	}
+	if !strings.Contains(view, "enter") {
+		t.Errorf("the key hints scrolled away:\n%s", view)
 	}
 }
