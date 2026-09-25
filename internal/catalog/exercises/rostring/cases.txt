@@ -1,0 +1,9 @@
+{"args": ["abc   "]}
+{"args": ["Que la      lumiere soit et la lumiere fut"]}
+{"args": ["     AkjhZ zLKIJz , 23y"]}
+{"args": ["first", "2", "11000000"]}
+{"args": ["\tone\ttwo\t"]}
+{"args": ["a b"]}
+{"args": [""]}
+{"args": ["   "]}
+{"args": []}

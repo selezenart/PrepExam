@@ -1,0 +1,8 @@
+{"args": ["hello world"]}
+{"args": ["  many   spaces  here  "]}
+{"args": ["\ttabs\tand\nnewlines\n"]}
+{"args": ["word"]}
+{"args": ["   \t\n "]}
+{"args": [""]}
+{"args": ["a b"]}
+{"args": ["x\n\ny"]}

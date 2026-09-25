@@ -68,8 +68,7 @@ grader. If a driver or a case file is wrong, that test fails.
 
 ## Content status
 
-Level 1 is complete and gradable. Levels 2 to 4 ship with their subjects and
-reference solutions, and become gradable as their drivers and case files land.
+All 56 exercises across the four levels are gradable.
 
 ## Credit
 
