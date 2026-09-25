@@ -1,0 +1,9 @@
+{"args": ["FOR PONY"]}
+{"args": ["this        ...       is sparta, then again, maybe    not"]}
+{"args": ["   "]}
+{"args": ["a b"]}
+{"args": ["  lorem,ipsum  "]}
+{"args": ["\tone\ttwo\t"]}
+{"args": [""]}
+{"args": []}
+{"args": ["a", "b"]}

@@ -105,12 +105,17 @@ func mutate(src string) (string, bool) {
 		{" <= ", " < "},
 		{" >= ", " > "},
 		{" == ", " != "},
-		{" + 1", " + 2"},
 		{"i++", "i += 2"},
 		{"len++", "len += 2"},
+		// After the counters: " + 1" often sizes a malloc, where growing it
+		// is an equivalent mutant no case can ever catch (ft_strdup).
+		{" + 1", " + 2"},
 		{" = *b;", " = *a;"},
 		{" 13", " 12"},
 		{" 26", " 25"},
+		// Bit-twiddling exercises have none of the operators above.
+		{" >> ", " << "},
+		{" % 2", " % 3"},
 	}
 	// Match against a comment-masked copy: the 42 header banner on every
 	// reference.c contains dates like "12:58:12", and ft_putstr keeps a

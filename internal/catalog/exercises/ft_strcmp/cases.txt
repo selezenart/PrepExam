@@ -1,0 +1,8 @@
+{"args": ["abc", "abc"]}
+{"args": ["abc", "abd"]}
+{"args": ["abd", "abc"]}
+{"args": ["", "a"]}
+{"args": ["a", ""]}
+{"args": ["", ""]}
+{"args": ["abc", "ab"]}
+{"args": ["ab", "abc"]}
