@@ -1,0 +1,6 @@
+{"args": ["zaz"]}
+{"args": ["dub0 a POIL"]}
+{"args": [""]}
+{"args": ["a"]}
+{"args": []}
+{"args": ["a", "b"]}

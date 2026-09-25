@@ -1,0 +1,5 @@
+{"args": ["L'eSPrit nE peUt plUs pRogResSer s'Il staGne."]}
+{"args": ["abcXYZ123"]}
+{"args": [""]}
+{"args": []}
+{"args": ["a", "b"]}

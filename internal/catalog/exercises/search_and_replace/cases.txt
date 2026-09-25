@@ -1,0 +1,7 @@
+{"args": ["Papache est un sabre", "a", "o"]}
+{"args": ["zaz", "z", "m"]}
+{"args": ["zaz", "v", "m"]}
+{"args": ["", "a", "b"]}
+{"args": ["abc", "a"]}
+{"args": []}
+{"args": ["abc", "ab", "c"]}

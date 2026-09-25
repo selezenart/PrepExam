@@ -34,7 +34,6 @@ type Meta struct {
 type Exercise struct {
 	Meta
 	Subject       string // the upstream subject, shown to the candidate
-	Spanish       string // the upstream Spanish explainer, practice mode only
 	Reference     string // the oracle solution
 	Driver        string // test main; empty when Kind is KindProgram
 	HeaderContent string // contents of Header; empty when Header is empty

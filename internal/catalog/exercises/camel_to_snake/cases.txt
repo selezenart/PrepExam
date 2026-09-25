@@ -1,0 +1,9 @@
+{"args": ["hereIsACamelCaseWord"]}
+{"args": ["helloWorld"]}
+{"args": ["abc"]}
+{"args": ["a"]}
+{"args": [""]}
+{"args": []}
+{"args": ["oneTwo", "threeFour"]}
+{"args": ["helloZorld"]}
+{"args": ["aZbY"]}
