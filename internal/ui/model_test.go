@@ -374,3 +374,15 @@ func TestTheExerciseScreenIsEnglishOnly(t *testing.T) {
 		t.Errorf("the exercise screen shows Spanish text:\n%s", view)
 	}
 }
+
+func TestAnExamNoticeDoesNotFollowIntoPractice(t *testing.T) {
+	m := newTestModel(t)
+	exam, _ := m.Update(key("1"))
+	passed, _ := exam.Update(gradedMsg{verdict: grader.Verdict{Status: grader.StatusOK, Summary: "OK"}})
+	menu, _ := passed.Update(key("q"))
+	list, _ := menu.Update(key("2"))
+	practice, _ := list.Update(key("enter"))
+	if strings.Contains(practice.View(), "last graded") {
+		t.Errorf("the practice screen shows the exam's notice:\n%s", practice.View())
+	}
+}
