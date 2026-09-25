@@ -1,0 +1,8 @@
+{"args": ["See? It's easy to print the same thing"]}
+{"args": [" this        time it      will     be    more complex  "]}
+{"args": ["\tx\t\ty "]}
+{"args": ["word"]}
+{"args": ["   "]}
+{"args": [""]}
+{"args": []}
+{"args": ["a", "b"]}

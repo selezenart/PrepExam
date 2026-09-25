@@ -76,6 +76,9 @@ func TestMutatedReferencesFail(t *testing.T) {
 	g := New()
 	for _, ex := range readyExercises(t) {
 		mutated, ok := mutate(ex.Reference)
+		if r, found := mutationOverrides[ex.Name]; found {
+			mutated, ok = strings.Replace(ex.Reference, r.from, r.to, 1), strings.Contains(ex.Reference, r.from)
+		}
 		if !ok {
 			t.Errorf("%s: no mutation could be applied; add a case that would catch one", ex.Name)
 			continue
@@ -96,6 +99,16 @@ func TestMutatedReferencesFail(t *testing.T) {
 			}
 		})
 	}
+}
+
+// mutationOverrides replaces mutate's first pick where that pick is an
+// equivalent mutant — an edit no input can ever expose, so demanding that a
+// case catch it would be demanding the impossible. Each entry says why.
+var mutationOverrides = map[string]struct{ from, to string }{
+	// The first " <= " sizes the array; at start == end both branches
+	// give a length of 1, so flipping it changes nothing observable.
+	"ft_range":  {"result[i] = start - i;", "result[i] = start - i - 1;"},
+	"ft_rrange": {"result[i] = end + i;", "result[i] = end + i + 1;"},
 }
 
 // mutate makes one behaviour-changing edit to C source. It tries each
