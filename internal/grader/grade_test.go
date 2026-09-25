@@ -207,3 +207,41 @@ int main(int argc, char **argv) {
 		t.Errorf("Status = %q, want %q", v.Status, StatusWrongOutput)
 	}
 }
+
+func listSizeExercise() catalog.Exercise {
+	header := "typedef struct s_list { struct s_list *next; void *data; } t_list;\n"
+	return catalog.Exercise{
+		Meta: catalog.Meta{
+			Name: "ft_list_size", Level: 3, Kind: catalog.KindFunction,
+			ExpectedFile: "ft_list_size.c", Header: "ft_list_size.h",
+			Prototype: "int ft_list_size(t_list *begin_list);",
+		},
+		HeaderContent: header,
+		Reference: `#include "ft_list_size.h"
+int ft_list_size(t_list *l){int n=0;while(l){n++;l=l->next;}return n;}`,
+		Driver: `#include <stdio.h>
+#include "ft_list_size.h"
+int ft_list_size(t_list *begin_list);
+int main(int argc, char **argv) {
+	t_list nodes[8];
+	t_list *head = 0;
+	for (int i = argc - 1; i >= 1 && i < 8; i--) {
+		nodes[i].data = argv[i]; nodes[i].next = head; head = &nodes[i];
+	}
+	printf("%d\n", ft_list_size(head));
+	return 0;
+}`,
+		Cases: []catalog.Case{{Args: []string{}}, {Args: []string{"a", "b", "c"}}},
+	}
+}
+
+// The candidate's directory here has no copy of the header, as when a
+// candidate deletes it or submits only the .c file the subject asks for.
+// The exercise's own header must still be found, as the Moulinette would.
+func TestGradeSuppliesTheExerciseHeader(t *testing.T) {
+	ex := listSizeExercise()
+	v := gradeSource(t, ex, ex.Reference)
+	if !v.Passed() {
+		t.Fatalf("the reference failed without a header beside it: %s: %s\n%s", v.Status, v.Summary, v.Detail)
+	}
+}

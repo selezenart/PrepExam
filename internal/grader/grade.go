@@ -70,9 +70,19 @@ func (g *Grader) Grade(ctx context.Context, ex catalog.Exercise, srcPath string)
 	}
 	defer os.RemoveAll(work)
 
+	// Exercises that ship a header are compiled against it, wherever the
+	// candidate's file lives. Quoted includes search the source's own
+	// directory first, so a header the candidate edited in rendu/ still
+	// wins for their file; the driver and reference always get this copy.
+	if ex.Header != "" {
+		if err := os.WriteFile(filepath.Join(work, ex.Header), []byte(ex.HeaderContent), 0o644); err != nil {
+			return Verdict{}, fmt.Errorf("writing header: %w", err)
+		}
+	}
+
 	// Compile the candidate.
 	userObj := filepath.Join(work, "user.o")
-	if out, err := g.compile(ctx, srcPath, userObj); err != nil {
+	if out, err := g.compile(ctx, srcPath, userObj, work); err != nil {
 		return Verdict{
 			Status:  StatusCompileError,
 			Summary: "your file did not compile with -Wall -Wextra -Werror",
@@ -106,7 +116,7 @@ func (g *Grader) Grade(ctx context.Context, ex catalog.Exercise, srcPath string)
 		return Verdict{}, err
 	}
 	refObj := filepath.Join(work, "ref.o")
-	if out, err := g.compile(ctx, refPath, refObj); err != nil {
+	if out, err := g.compile(ctx, refPath, refObj, work); err != nil {
 		return Verdict{}, fmt.Errorf("the reference solution for %s did not compile: %s", ex.Name, out)
 	}
 
@@ -120,7 +130,7 @@ func (g *Grader) Grade(ctx context.Context, ex catalog.Exercise, srcPath string)
 		driverObj := filepath.Join(work, "driver.o")
 		// The driver is ours, not the candidate's, so its own calls are never
 		// subject to the allowed-functions check.
-		if out, err := g.compile(ctx, driverPath, driverObj); err != nil {
+		if out, err := g.compile(ctx, driverPath, driverObj, work); err != nil {
 			return Verdict{}, fmt.Errorf("the driver for %s did not compile: %s", ex.Name, out)
 		}
 		extra = []string{driverObj}
@@ -187,8 +197,8 @@ func compare(ex catalog.Exercise, c catalog.Case, want, got sandbox.Result, time
 	return Verdict{}, true
 }
 
-func (g *Grader) compile(ctx context.Context, src, obj string) (string, error) {
-	args := append(append([]string{}, compileFlags...), "-c", src, "-o", obj)
+func (g *Grader) compile(ctx context.Context, src, obj, includeDir string) (string, error) {
+	args := append(append([]string{}, compileFlags...), "-I", includeDir, "-c", src, "-o", obj)
 	out, err := exec.CommandContext(ctx, g.CC, args...).CombinedOutput()
 	return string(out), err
 }
