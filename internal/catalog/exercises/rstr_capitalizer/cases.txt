@@ -1,0 +1,8 @@
+{"args": ["a FiRSt LiTTlE TESt"]}
+{"args": ["SecONd teST A LITtle BiT   Moar comPLEX", "   But... This iS not THAT COMPLEX", "     Okay, this is the last 1239809147801 but not    the least    t"]}
+{"args": ["x"]}
+{"args": ["\tab\tcD\t"]}
+{"args": [""]}
+{"args": []}
+{"args": ["fizz buzz z"]}
+{"args": ["ZEBRA zoo"]}

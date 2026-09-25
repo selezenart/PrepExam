@@ -1,0 +1,4 @@
+{"args": ["hello"]}
+{"args": [""]}
+{"args": ["a"]}
+{"args": ["a longer string to copy"]}

@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"io/fs"
 	"testing"
 	"testing/fstest"
 )
@@ -130,5 +131,37 @@ func TestByLevelIsSortedByName(t *testing.T) {
 	}
 	if n := len(c.ByLevel(4)); n != 0 {
 		t.Errorf("ByLevel(4) returned %d, want 0", n)
+	}
+}
+
+func TestEveryLevelHasGradableExercises(t *testing.T) {
+	// An exam draws one exercise per level. A level with nothing gradable
+	// would make exam mode refuse to start.
+	c, err := Embedded()
+	if err != nil {
+		t.Fatalf("Embedded() error = %v", err)
+	}
+	for level := 1; level <= 4; level++ {
+		if n := len(c.GradableByLevel(level)); n == 0 {
+			t.Errorf("level %d has no gradable exercises; exam mode cannot start", level)
+		}
+	}
+	if n := len(c.All()); n != 56 {
+		t.Errorf("All() = %d exercises, want 56", n)
+	}
+}
+
+func TestTheEmbeddedCatalogIsEnglishOnly(t *testing.T) {
+	err := fs.WalkDir(EmbeddedFS(), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Name() == "spanish.md" {
+			t.Errorf("%s is still embedded; the trainer is English only", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

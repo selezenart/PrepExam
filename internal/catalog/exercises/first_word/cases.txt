@@ -1,0 +1,7 @@
+{"args": ["FOR PONY"]}
+{"args": ["this        ...       is sparta, then?"]}
+{"args": [""]}
+{"args": ["   "]}
+{"args": ["  lorem,ipsum  "]}
+{"args": []}
+{"args": ["a", "b"]}

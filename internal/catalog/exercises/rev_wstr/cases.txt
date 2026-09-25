@@ -1,0 +1,6 @@
+{"args": ["You hate people! But I love gatherings. Isn't it ironic?"]}
+{"args": ["abcdefghijklm"]}
+{"args": ["Wingardium Leviosa"]}
+{"args": ["a b c"]}
+{"args": []}
+{"args": ["a", "b"]}

@@ -1,0 +1,10 @@
+{"args": ["faya", "fgvvfdxcacpolhyghbreda"]}
+{"args": ["faya", "fgvvfdxcacpolhyghbred"]}
+{"args": ["quarante deux", "qfqfsudf arzgsayns tsregfdgs sjytdekuoixq "]}
+{"args": ["error", "rrerrrfiiljdfxjyuifrrvcoojh"]}
+{"args": ["", ""]}
+{"args": ["", "abc"]}
+{"args": ["abc", ""]}
+{"args": []}
+{"args": ["a"]}
+{"args": ["a", "b", "c"]}

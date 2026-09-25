@@ -1,0 +1,7 @@
+{"args": ["abc"]}
+{"args": ["Salut, comment tu vas ? 32 chars cheer"]}
+{"args": ["zZ"]}
+{"args": ["nopqrstuvwxyz"]}
+{"args": [""]}
+{"args": []}
+{"args": ["a", "b"]}

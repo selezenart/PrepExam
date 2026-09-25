@@ -1,12 +1,12 @@
 // Command import converts the vendored upstream exercise repository into the
-// data/exercises tree the application embeds.
+// internal/catalog/exercises tree the application embeds.
 //
 // It is run by hand, and its output is committed. Two fields it writes are
 // guesses that a human must confirm: kind, because a phrase heuristic
 // classifies only 43 of 56 subjects, and expected_file for the four subjects
 // whose expected files are a glob.
 //
-// Usage: go run ./tools/import -src third_party/exam_rank_02 -dst data/exercises
+// Usage: go run ./tools/import -src third_party/exam_rank_02 -dst internal/catalog/exercises
 package main
 
 import (
@@ -24,7 +24,7 @@ import (
 
 func main() {
 	src := flag.String("src", "third_party/exam_rank_02", "vendored upstream repository")
-	dst := flag.String("dst", "data/exercises", "output directory")
+	dst := flag.String("dst", "internal/catalog/exercises", "output directory")
 	flag.Parse()
 
 	if err := run(*src, *dst); err != nil {
@@ -79,11 +79,8 @@ func importOne(srcDir, dstRoot string, level int, name string) (string, error) {
 		return "", err
 	}
 
-	if spanish, err := os.ReadFile(filepath.Join(srcDir, "spanish.md")); err == nil {
-		if err := os.WriteFile(filepath.Join(outDir, "spanish.md"), spanish, 0o644); err != nil {
-			return "", err
-		}
-	}
+	// Upstream also ships a Spanish explainer; the trainer is English only,
+	// so it is deliberately not imported.
 
 	// The reference solution is whichever .c file upstream ships. Any commented
 	// out demo main it contains is left as is: it is inside a comment, so it
