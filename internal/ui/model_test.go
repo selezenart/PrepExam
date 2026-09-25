@@ -347,3 +347,30 @@ func TestStartingAnExamOverAnInFlightOneAsksFirst(t *testing.T) {
 		t.Error("confirming did not start a new exam")
 	}
 }
+
+func TestTheExerciseScreenIsEnglishOnly(t *testing.T) {
+	fsys := fstest.MapFS{
+		"exercises/ft_strlen/meta.yaml": &fstest.MapFile{Data: []byte(
+			"name: ft_strlen\nlevel: 1\nkind: program\nexpected_file: ft_strlen.c\nallowed_functions: []\nprototype: \"\"\n")},
+		"exercises/ft_strlen/subject.md":  &fstest.MapFile{Data: []byte("subject for ft_strlen")},
+		"exercises/ft_strlen/spanish.md":  &fstest.MapFile{Data: []byte("texto en castellano")},
+		"exercises/ft_strlen/reference.c": &fstest.MapFile{Data: []byte("int main(void){return 0;}")},
+		"exercises/ft_strlen/cases.txt":   &fstest.MapFile{Data: []byte("{\"args\": []}\n")},
+	}
+	c, err := catalog.Load(fsys)
+	if err != nil {
+		t.Fatalf("catalog.Load() error = %v", err)
+	}
+	state, _ := store.Load(t.TempDir())
+	m := New(Deps{
+		Catalog: c, Grader: grader.New(), Config: store.DefaultConfig(),
+		State: state, StateDir: t.TempDir(), Root: t.TempDir(),
+	})
+	m, _ = m.Update(key("2"))
+	m, _ = m.Update(key("enter"))
+	m, _ = m.Update(key("x"))
+	view := m.View()
+	if strings.Contains(view, "castellano") || strings.Contains(view, "explicación") {
+		t.Errorf("the exercise screen shows Spanish text:\n%s", view)
+	}
+}

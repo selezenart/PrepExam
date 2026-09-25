@@ -70,11 +70,6 @@ func loadExercise(fsys fs.FS, dir string) (Exercise, error) {
 		*dest = string(b)
 	}
 
-	// The Spanish explainer is a nicety; an exercise without one still works.
-	if b, err := fs.ReadFile(fsys, dir+"/spanish.md"); err == nil {
-		ex.Spanish = string(b)
-	}
-
 	// A driver is required only once cases exist; see the cases.txt handling
 	// below for why an exercise may legitimately have neither yet.
 	if b, err := fs.ReadFile(fsys, dir+"/driver.c"); err == nil {

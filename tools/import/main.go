@@ -79,11 +79,8 @@ func importOne(srcDir, dstRoot string, level int, name string) (string, error) {
 		return "", err
 	}
 
-	if spanish, err := os.ReadFile(filepath.Join(srcDir, "spanish.md")); err == nil {
-		if err := os.WriteFile(filepath.Join(outDir, "spanish.md"), spanish, 0o644); err != nil {
-			return "", err
-		}
-	}
+	// Upstream also ships a Spanish explainer; the trainer is English only,
+	// so it is deliberately not imported.
 
 	// The reference solution is whichever .c file upstream ships. Any commented
 	// out demo main it contains is left as is: it is inside a comment, so it
