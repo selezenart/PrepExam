@@ -1,0 +1,6 @@
+{"args": ["hello"]}
+{"args": [""]}
+{"args": ["a"]}
+{"args": ["ab"]}
+{"args": ["racecar"]}
+{"args": ["Hello World!"]}

@@ -1,0 +1,7 @@
+{"args": ["abc"]}
+{"args": ["My horse is Amazing."]}
+{"args": ["AkjhZ zLKIJz , 23y "]}
+{"args": ["z"]}
+{"args": [""]}
+{"args": []}
+{"args": ["a", "b"]}

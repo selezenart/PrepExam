@@ -1,0 +1,7 @@
+{"args": ["here_is_a_snake_case_word"]}
+{"args": ["hello_world"]}
+{"args": ["abc"]}
+{"args": ["a"]}
+{"args": [""]}
+{"args": []}
+{"args": ["one_two", "three"]}
