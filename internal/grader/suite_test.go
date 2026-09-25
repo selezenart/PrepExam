@@ -101,14 +101,21 @@ func TestMutatedReferencesFail(t *testing.T) {
 	}
 }
 
-// mutationOverrides replaces mutate's first pick where that pick is an
-// equivalent mutant — an edit no input can ever expose, so demanding that a
-// case catch it would be demanding the impossible. Each entry says why.
+// mutationOverrides replaces mutate's pick where it has none to offer, or
+// where its pick is an equivalent mutant — an edit no input can reliably
+// expose, so demanding that a case catch it would be demanding the
+// impossible. Each entry says why.
 var mutationOverrides = map[string]struct{ from, to string }{
 	// The first " <= " sizes the array; at start == end both branches
 	// give a length of 1, so flipping it changes nothing observable.
 	"ft_range":  {"result[i] = start - i;", "result[i] = start - i - 1;"},
 	"ft_rrange": {"result[i] = end + i;", "result[i] = end + i + 1;"},
+	// The first " <= " only matters for 0, where the mutant writes "0" over
+	// its own terminator: undefined behaviour that usually prints correctly.
+	"ft_itoa": {"n % 10 + '0'", "n % 10 + '1'"},
+	// No generic mutation applies to these two.
+	"ft_list_foreach": {"begin_list = begin_list->next;", "begin_list = begin_list->next ? begin_list->next->next : 0;"},
+	"sort_list":       {"if (!cmp(", "if (cmp("},
 }
 
 // mutate makes one behaviour-changing edit to C source. It tries each
