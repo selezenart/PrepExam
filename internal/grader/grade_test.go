@@ -245,3 +245,23 @@ func TestGradeSuppliesTheExerciseHeader(t *testing.T) {
 		t.Fatalf("the reference failed without a header beside it: %s: %s\n%s", v.Status, v.Summary, v.Detail)
 	}
 }
+
+// When the reference itself runs out of time there is no expected output to
+// compare with. Judging the candidate against the reference's empty stdout
+// would fail correct code with "expected: (nothing)".
+func TestGradeErrorsWhenTheReferenceTimesOut(t *testing.T) {
+	requireCC(t)
+	ex := rot13Exercise()
+	ex.Reference = "int main(void) { for (;;) ; }"
+	ex.TimeoutMS = 300
+	dir := t.TempDir()
+	path := filepath.Join(dir, ex.ExpectedFile)
+	src := "#include <unistd.h>\nint main(void) { write(1, \"\\n\", 1); return 0; }"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v, err := New().Grade(context.Background(), ex, path)
+	if err == nil {
+		t.Fatalf("Grade() = %s %q, want an error: the reference produced no answer to compare with", v.Status, v.Summary)
+	}
+}

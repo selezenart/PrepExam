@@ -153,6 +153,10 @@ func (g *Grader) Grade(ctx context.Context, ex catalog.Exercise, srcPath string)
 		if err != nil {
 			return Verdict{}, fmt.Errorf("running the reference: %w", err)
 		}
+		if want.TimedOut {
+			return Verdict{}, fmt.Errorf("the reference solution for %s timed out on %s, so there is no answer to compare yours with; this is a problem with the exercise, not your code",
+				ex.Name, describeInvocation(ex, c))
+		}
 		got, err := sandbox.Run(ctx, userBin, c.Args, c.Stdin, timeout)
 		if err != nil {
 			return Verdict{}, fmt.Errorf("running your program: %w", err)
