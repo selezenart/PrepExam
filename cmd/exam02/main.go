@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -45,7 +46,8 @@ func run(root string) error {
 	// Fail here rather than at the first grading attempt: being told there is
 	// no compiler before starting a three hour exam is worth a lot more than
 	// being told forty minutes in.
-	if err := grader.CheckToolchain(); err != nil {
+	g := grader.New()
+	if err := g.CheckToolchain(context.Background()); err != nil {
 		return fmt.Errorf("%w\n\n%s", err, toolchainAdvice())
 	}
 
@@ -69,7 +71,7 @@ func run(root string) error {
 
 	model := ui.New(ui.Deps{
 		Catalog:    c,
-		Grader:     grader.New(),
+		Grader:     g,
 		Config:     cfg,
 		State:      state,
 		StateDir:   dir,

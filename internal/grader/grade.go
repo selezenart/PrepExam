@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,16 +29,6 @@ type Grader struct {
 
 // New returns a Grader using the system toolchain.
 func New() *Grader { return &Grader{CC: "cc"} }
-
-// CheckToolchain reports whether the tools the grader needs are present.
-func CheckToolchain() error {
-	for _, tool := range []string{"cc", "nm"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			return fmt.Errorf("%s not found in PATH", tool)
-		}
-	}
-	return nil
-}
 
 // Grade compiles the candidate's file, checks it for forbidden calls, and runs
 // it against the reference solution on every case.
@@ -83,6 +72,9 @@ func (g *Grader) Grade(ctx context.Context, ex catalog.Exercise, srcPath string)
 	// Compile the candidate.
 	userObj := filepath.Join(work, "user.o")
 	if out, err := g.compile(ctx, srcPath, userObj, work); err != nil {
+		if !blamesSource(out, err, srcPath) {
+			return Verdict{}, fmt.Errorf("the C compiler could not run, so your code was not graded: %s", toolFailure(out, err))
+		}
 		return Verdict{
 			Status:  StatusCompileError,
 			Summary: "your file did not compile with -Wall -Wextra -Werror",
@@ -203,12 +195,12 @@ func compare(ex catalog.Exercise, c catalog.Case, want, got sandbox.Result, time
 
 func (g *Grader) compile(ctx context.Context, src, obj, includeDir string) (string, error) {
 	args := append(append([]string{}, compileFlags...), "-I", includeDir, "-c", src, "-o", obj)
-	out, err := exec.CommandContext(ctx, g.CC, args...).CombinedOutput()
+	out, err := toolCommand(ctx, g.CC, args...).CombinedOutput()
 	return string(out), err
 }
 
 func (g *Grader) link(ctx context.Context, objs []string, bin string) (string, error) {
-	out, err := exec.CommandContext(ctx, g.CC, append(objs, "-o", bin)...).CombinedOutput()
+	out, err := toolCommand(ctx, g.CC, append(objs, "-o", bin)...).CombinedOutput()
 	return string(out), err
 }
 
