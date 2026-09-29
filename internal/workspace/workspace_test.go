@@ -106,3 +106,22 @@ func TestEditorCommandHonoursTheEnvironment(t *testing.T) {
 		t.Errorf("editor = %q, want the vim default", cmd.Args[0])
 	}
 }
+
+func TestUntouchedRecognisesAFreshStub(t *testing.T) {
+	ex := catalog.Exercise{Meta: catalog.Meta{
+		Name: "first_word", Kind: catalog.KindProgram, ExpectedFile: "first_word.c",
+	}}
+	path, err := Prepare(t.TempDir(), ex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if untouched, err := Untouched(path, ex); err != nil || !untouched {
+		t.Errorf("Untouched() = %v, %v on a fresh stub, want true", untouched, err)
+	}
+	if err := os.WriteFile(path, []byte("int main(void) { return 0; }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if untouched, err := Untouched(path, ex); err != nil || untouched {
+		t.Errorf("Untouched() = %v, %v on an edited file, want false", untouched, err)
+	}
+}

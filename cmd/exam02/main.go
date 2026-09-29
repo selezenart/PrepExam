@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -42,7 +43,23 @@ func main() {
 	}
 }
 
+// resolveRoot makes the rendu/ directory absolute, so the path shown on
+// screen and recorded with an exam names one exact place however the
+// program is launched.
+func resolveRoot(root string) (string, error) {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolving -dir %s: %w", root, err)
+	}
+	return abs, nil
+}
+
 func run(root string) error {
+	root, err := resolveRoot(root)
+	if err != nil {
+		return err
+	}
+
 	// Fail here rather than at the first grading attempt: being told there is
 	// no compiler before starting a three hour exam is worth a lot more than
 	// being told forty minutes in.

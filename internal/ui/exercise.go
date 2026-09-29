@@ -32,6 +32,14 @@ func (m Model) updateExercise(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 
 	case "g":
+		// A file still holding its starter stub was almost certainly not the
+		// one the candidate edited. Grading it would report "wrong output"
+		// for code they never wrote, and in an exam cost them the exercise.
+		if untouched, err := workspace.Untouched(m.srcPath, m.current); err == nil && untouched {
+			m.verdict = nil
+			m.err = fmt.Errorf("%s is still the untouched starter file, so nothing was graded; did you write your answer in a different rendu/ folder?", m.srcPath)
+			return m, nil
+		}
 		m.grading = true
 		m.status = "compiling…"
 		m.err = nil
@@ -75,6 +83,7 @@ func (m Model) applyVerdict(msg gradedMsg) (Model, tea.Cmd) {
 	}
 	v := msg.verdict
 	m.verdict = &v
+	m.gradedPath = m.srcPath
 
 	m.deps.State.Record(m.current.Name, string(v.Status), v.Passed())
 	if err := m.deps.State.Save(m.deps.StateDir); err != nil {
@@ -95,6 +104,7 @@ func (m Model) applyVerdict(msg gradedMsg) (Model, tea.Cmd) {
 		graded := m.current.Name
 		next, cmd := m.loadCurrent()
 		next.verdict = &v
+		next.gradedPath = m.gradedPath
 		next.notice = fmt.Sprintf("last graded: %s", graded)
 		return next, cmd
 	}
@@ -137,6 +147,9 @@ func (m Model) viewExercise() string {
 		b.WriteString(m.status + "\n")
 	case m.verdict != nil:
 		b.WriteString(renderVerdict(*m.verdict) + "\n")
+		if !m.verdict.Passed() {
+			b.WriteString(styleDim.Render("graded "+m.gradedPath) + "\n")
+		}
 	}
 	if m.err != nil {
 		b.WriteString(styleKO.Render("error: "+m.err.Error()) + "\n")

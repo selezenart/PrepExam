@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -50,6 +51,18 @@ func (m Model) updateMenu(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "c":
 		if m.exam != nil && !m.exam.Over(time.Now()) {
 			m.screen = screenExam
+			// An exam saved before exams recorded their directory adopts
+			// this one from now on.
+			if m.exam.Root == "" {
+				m.exam.Root = m.deps.Root
+			}
+			if m.exam.Root != m.deps.Root {
+				note := "this exam's files are in " + filepath.Join(m.exam.Root, "rendu") + ", where it was started"
+				if m.notice != "" {
+					note = m.notice + "\n" + note
+				}
+				m.notice = note
+			}
 			return m.loadCurrent()
 		}
 		return m, nil

@@ -27,6 +27,11 @@ func (s Stats) Failures() int { return s.Attempts - s.Passes }
 type State struct {
 	Exercises map[string]*Stats `json:"exercises"`
 	Exam      json.RawMessage   `json:"exam,omitempty"`
+
+	// Workspace is the directory rendu/ was created in last time, so a launch
+	// from a different directory can be pointed out rather than silently
+	// starting a second, empty rendu/.
+	Workspace string `json:"workspace,omitempty"`
 }
 
 // Dir returns the per-user directory holding config and state.

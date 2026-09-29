@@ -36,6 +36,11 @@ type Exam struct {
 	Cleared         int       `json:"cleared"`
 	History         []Attempt `json:"history"`
 
+	// Root is the directory the exam's rendu/ lives in. A resumed exam keeps
+	// using it wherever the program is launched from, so the candidate's
+	// files are never swapped for fresh stubs in another directory.
+	Root string `json:"root,omitempty"`
+
 	pools        map[int][]string
 	rng          *rand.Rand
 	substitution *Substitution

@@ -5,6 +5,7 @@ package ui
 import (
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -53,11 +54,14 @@ type Model struct {
 	practice []catalog.Exercise
 	cursor   int
 
-	current  catalog.Exercise
-	srcPath  string
-	verdict  *grader.Verdict
-	grading  bool
-	revealed bool
+	current catalog.Exercise
+	srcPath string
+	verdict *grader.Verdict
+	// gradedPath is the file the verdict on screen was for. In an exam a new
+	// exercise is drawn straight after grading, so it can differ from srcPath.
+	gradedPath string
+	grading    bool
+	revealed   bool
 
 	status         string
 	confirmRestart bool   // the next 1 on the menu abandons the exam in flight
@@ -89,6 +93,15 @@ func New(deps Deps) Model {
 	if s := m.exam; s != nil && s.Substitution() != nil {
 		sub := s.Substitution()
 		m.notice = fmt.Sprintf("%s is no longer in the catalog; your exercise is now %s", sub.From, sub.To)
+	}
+	// Each launch directory gets its own rendu/. Starting from a different
+	// one than last time silently hands the candidate fresh stubs, so say so.
+	if st := deps.State; st != nil {
+		if st.Workspace != "" && st.Workspace != deps.Root {
+			m.status = fmt.Sprintf("last time your files were in %s; this time they are in %s",
+				filepath.Join(st.Workspace, "rendu"), filepath.Join(deps.Root, "rendu"))
+		}
+		st.Workspace = deps.Root
 	}
 	return m
 }
@@ -221,6 +234,7 @@ func (m Model) startExam() (Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
+	exam.Root = m.deps.Root
 	m.exam = exam
 	m.notice = ""
 	m.screen = screenExam
@@ -244,13 +258,31 @@ func (m Model) loadCurrent() (Model, tea.Cmd) {
 	m.verdict = nil
 	m.revealed = false
 	m.err = nil
-	path, err := prepareWorkspace(m.deps.Root, ex)
+	path, err := prepareWorkspace(m.workspaceRoot(), ex)
 	if err != nil {
 		m.err = err
 		return m, nil
 	}
 	m.srcPath = path
+	// Record the practice directory the moment rendu/ is used, so the next
+	// launch can point out a different one even if this run never quits
+	// cleanly. An exam's own directory is recorded with the exam instead.
+	if st := m.deps.State; st != nil && m.screen != screenExam {
+		st.Workspace = m.deps.Root
+		if err := st.Save(m.deps.StateDir); err != nil {
+			m.err = err
+		}
+	}
 	return m, nil
+}
+
+// workspaceRoot is where rendu/ lives for the exercise on screen: the
+// directory an exam was started in, or the launch directory for practice.
+func (m Model) workspaceRoot() string {
+	if m.screen == screenExam && m.exam != nil && m.exam.Root != "" {
+		return m.exam.Root
+	}
+	return m.deps.Root
 }
 
 // persistExam writes the in-flight exam into saved state. A finished exam is
