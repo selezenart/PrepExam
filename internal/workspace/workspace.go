@@ -44,6 +44,17 @@ func Prepare(root string, ex catalog.Exercise) (string, error) {
 	return path, nil
 }
 
+// Untouched reports whether the file at path still holds exactly the stub
+// Prepare seeded it with. Grading that is almost never what the candidate
+// meant: far more often they wrote their answer in another copy of rendu/.
+func Untouched(path string, ex catalog.Exercise) (bool, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	return string(b) == stub(ex), nil
+}
+
 // stub is the starting content of a fresh answer file: enough to compile
 // against, never enough to be a hint.
 func stub(ex catalog.Exercise) string {

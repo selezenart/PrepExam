@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -402,5 +403,129 @@ func TestPracticeListIsSortedByLevel(t *testing.T) {
 			t.Fatalf("%s is out of level order:\n%s", name, view)
 		}
 		last = i
+	}
+}
+
+func TestTheExerciseScreenShowsTheAbsolutePathOfTheFile(t *testing.T) {
+	root := t.TempDir()
+	state, _ := store.Load(t.TempDir())
+	m := New(Deps{
+		Catalog: testCatalog(t), Grader: grader.New(), Config: store.DefaultConfig(),
+		State: state, StateDir: t.TempDir(), Root: root,
+	})
+	exam, _ := m.Update(key("1"))
+	want := filepath.Join(root, "rendu", exam.current.Name, exam.current.ExpectedFile)
+	if !strings.Contains(exam.View(), want) {
+		t.Errorf("the exercise screen does not show %s:\n%s", want, exam.View())
+	}
+}
+
+func TestAKOShowsWhichFileWasGraded(t *testing.T) {
+	m := newTestModel(t)
+	list, _ := m.Update(key("2"))
+	ex, _ := list.Update(key("enter"))
+	ko, _ := ex.Update(gradedMsg{verdict: grader.Verdict{Status: grader.StatusWrongOutput, Summary: "wrong output"}})
+	if !strings.Contains(ko.View(), "graded "+ko.srcPath) {
+		t.Errorf("a KO does not say which file was graded:\n%s", ko.View())
+	}
+}
+
+func TestGradingAnUntouchedStubWarnsInsteadOfGrading(t *testing.T) {
+	m := newTestModel(t)
+	exam, _ := m.Update(key("1"))
+	next, cmd := exam.Update(key("g"))
+	if cmd != nil || next.grading {
+		t.Fatal("an untouched starter file was sent to the grader")
+	}
+	if len(next.exam.Attempts()) != 0 {
+		t.Error("an untouched starter file cost an exam attempt")
+	}
+	if !strings.Contains(next.View(), "untouched") {
+		t.Errorf("no warning about the untouched file:\n%s", next.View())
+	}
+}
+
+func TestAResumedExamKeepsTheWorkspaceItStartedIn(t *testing.T) {
+	pools := map[int][]string{1: {"ft_strlen"}, 2: {"ft_atoi"}, 3: {"epur_str"}, 4: {"ft_split"}}
+	exam, err := session.NewExam(store.DefaultConfig(), pools, rand.New(rand.NewSource(1)), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := t.TempDir()
+	exam.Root = started
+	state, _ := store.Load(t.TempDir())
+	m := New(Deps{
+		Catalog: testCatalog(t), Grader: grader.New(), Config: store.DefaultConfig(),
+		State: state, StateDir: t.TempDir(), Root: t.TempDir(), ResumeExam: exam,
+	})
+	resumed, _ := m.Update(key("c"))
+	if !strings.HasPrefix(resumed.srcPath, started) {
+		t.Errorf("resumed exam uses %s, want a file under %s where it started", resumed.srcPath, started)
+	}
+	if !strings.Contains(resumed.View(), started) {
+		t.Errorf("the screen does not say where the exam's files are:\n%s", resumed.View())
+	}
+}
+
+func TestTheMenuWarnsWhenLaunchedFromADifferentFolder(t *testing.T) {
+	state, _ := store.Load(t.TempDir())
+	state.Workspace = "/somewhere/else"
+	m := New(Deps{
+		Catalog: testCatalog(t), Grader: grader.New(), Config: store.DefaultConfig(),
+		State: state, StateDir: t.TempDir(), Root: t.TempDir(),
+	})
+	if !strings.Contains(m.View(), "/somewhere/else") {
+		t.Errorf("the menu does not mention the previous rendu/ folder:\n%s", m.View())
+	}
+}
+
+func TestAnExamKONamesTheFileThatWasGradedNotTheNextOne(t *testing.T) {
+	// Two level 1 exercises, so a failure must redraw the other one.
+	fsys := fstest.MapFS{}
+	for name, level := range map[string]int{"aaa": 1, "bbb": 1, "ft_atoi": 2, "epur_str": 3, "ft_split": 4} {
+		dir := "exercises/" + name + "/"
+		fsys[dir+"meta.yaml"] = &fstest.MapFile{Data: []byte(fmt.Sprintf(
+			"name: %s\nlevel: %d\nkind: program\nexpected_file: %s.c\nallowed_functions: []\nprototype: \"\"\n", name, level, name))}
+		fsys[dir+"subject.md"] = &fstest.MapFile{Data: []byte("subject for " + name)}
+		fsys[dir+"reference.c"] = &fstest.MapFile{Data: []byte("int main(void){return 0;}")}
+		fsys[dir+"cases.txt"] = &fstest.MapFile{Data: []byte("{\"args\": []}\n")}
+	}
+	c, err := catalog.Load(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, _ := store.Load(t.TempDir())
+	m := New(Deps{
+		Catalog: c, Grader: grader.New(), Config: store.DefaultConfig(),
+		State: state, StateDir: t.TempDir(), Root: t.TempDir(),
+	})
+	exam, _ := m.Update(key("1"))
+	graded := exam.srcPath
+	next, _ := exam.Update(gradedMsg{verdict: grader.Verdict{Status: grader.StatusWrongOutput, Summary: "wrong output"}})
+	if next.srcPath == graded {
+		t.Fatal("the failure did not redraw a different exercise; the test proves nothing")
+	}
+	if !strings.Contains(next.View(), "graded "+graded) {
+		t.Errorf("the KO does not name %s, the file that was graded:\n%s", graded, next.View())
+	}
+}
+
+// The folder must be on disk as soon as rendu/ is used there, not only when
+// the program quits cleanly: a closed terminal would otherwise lose it.
+func TestOpeningAnExerciseRecordsTheWorkspaceOnDisk(t *testing.T) {
+	stateDir, root := t.TempDir(), t.TempDir()
+	state, _ := store.Load(stateDir)
+	m := New(Deps{
+		Catalog: testCatalog(t), Grader: grader.New(), Config: store.DefaultConfig(),
+		State: state, StateDir: stateDir, Root: root,
+	})
+	list, _ := m.Update(key("2"))
+	list.Update(key("enter"))
+	saved, err := store.Load(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Workspace != root {
+		t.Errorf("saved Workspace = %q, want %q", saved.Workspace, root)
 	}
 }

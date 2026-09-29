@@ -3,7 +3,6 @@ package grader
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"runtime"
 	"sort"
 	"strings"
@@ -12,7 +11,7 @@ import (
 // objectSymbols runs nm over an object file and returns its undefined and
 // defined symbol names.
 func objectSymbols(ctx context.Context, objPath string) (undefined, defined []string, err error) {
-	out, err := exec.CommandContext(ctx, "nm", objPath).Output()
+	out, err := toolCommand(ctx, "nm", objPath).Output()
 	if err != nil {
 		return nil, nil, fmt.Errorf("running nm on %s: %w", objPath, err)
 	}

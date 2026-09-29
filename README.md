@@ -8,20 +8,20 @@ that most informal practice setups skip.
 
 ## Install
 
-Download the binary for your platform, make it executable, and put it on your
-PATH:
+On macOS, download `exam02_darwin_universal` from the
+[latest release](https://github.com/selezenart/PrepExam/releases/latest). It
+runs natively on both Apple Silicon and Intel Macs, so there is no
+architecture to pick:
 
 ```bash
-chmod +x exam02_darwin_arm64
-mv exam02_darwin_arm64 /usr/local/bin/exam02
+curl -L -o exam02 https://github.com/selezenart/PrepExam/releases/latest/download/exam02_darwin_universal
+chmod +x exam02
+xattr -d com.apple.quarantine exam02 2>/dev/null   # the build is unsigned
+sudo mv exam02 /usr/local/bin/
 ```
 
-The macOS builds are unsigned, so Gatekeeper quarantines them on download.
-Clear it once:
-
-```bash
-xattr -d com.apple.quarantine /usr/local/bin/exam02
-```
+On Linux, download `exam02_linux_amd64` (or `_arm64`), make it executable,
+and put it on your PATH.
 
 You need a C toolchain — `cc` and `nm`. macOS: `xcode-select --install`.
 Debian or Ubuntu: `sudo apt install build-essential`.

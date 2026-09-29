@@ -367,3 +367,19 @@ func TestAttemptsReturnsACopy(t *testing.T) {
 		t.Error("Attempts() aliases internal state: mutating the returned slice changed it")
 	}
 }
+
+func TestTheWorkspaceRootSurvivesASaveAndReload(t *testing.T) {
+	exam := newTestExam(t, time.Now())
+	exam.Root = "/home/candidate/practice"
+	raw, err := Encode(exam)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := Decode(raw, testPools(), rand.New(rand.NewSource(1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.Root != exam.Root {
+		t.Errorf("Root = %q after reload, want %q", back.Root, exam.Root)
+	}
+}

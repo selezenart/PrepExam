@@ -17,8 +17,9 @@ test:
 vet:
 	go vet ./...
 
-# Cross-compiles every supported platform. cgo stays off so the binaries are
-# static and the macOS builds need no Mac to produce.
+# Cross-compiles every supported platform, plus one universal macOS binary.
+# cgo stays off so the binaries are static and the macOS builds need no Mac
+# to produce.
 dist: test
 	@mkdir -p dist
 	@for platform in $(PLATFORMS); do \
@@ -27,6 +28,8 @@ dist: test
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch \
 			go build -ldflags '$(LDFLAGS)' -o dist/$(BINARY)_$${os}_$${arch} ./cmd/exam02 || exit 1; \
 	done
+	@echo "joining the macOS builds into one universal binary"
+	@go run ./tools/lipo -o dist/$(BINARY)_darwin_universal dist/$(BINARY)_darwin_amd64 dist/$(BINARY)_darwin_arm64
 	@cd dist && shasum -a 256 $(BINARY)_* > SHA256SUMS 2>/dev/null || sha256sum $(BINARY)_* > SHA256SUMS
 	@ls -lh dist/
 
