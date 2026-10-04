@@ -141,3 +141,102 @@ func TestLoadConfigReadsOverrides(t *testing.T) {
 		t.Errorf("PassMark = %d, want 50", c.PassMark)
 	}
 }
+
+func TestToggleUnsureMarksAndUnmarksAndSurvivesASave(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := Load(dir)
+
+	// Marking does not need an attempt first: you can be unsure of an
+	// exercise you have only read.
+	if got := s.ToggleUnsure("rot_13"); !got {
+		t.Fatalf("ToggleUnsure() = false, want true on first toggle")
+	}
+	if err := s.Save(dir); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	again, _ := Load(dir)
+	if !again.IsUnsure("rot_13") {
+		t.Errorf("IsUnsure(rot_13) = false after reload, want true")
+	}
+	if st := again.Exercises["rot_13"]; st.Attempts != 0 {
+		t.Errorf("Attempts = %d, want 0: marking is not an attempt", st.Attempts)
+	}
+
+	if got := again.ToggleUnsure("rot_13"); got {
+		t.Errorf("ToggleUnsure() = true, want false on second toggle")
+	}
+	if again.IsUnsure("rot_13") {
+		t.Errorf("IsUnsure(rot_13) = true, want false after unmarking")
+	}
+}
+
+func TestUnsureSurvivesGradingAndUnmarkingKeepsTheRecord(t *testing.T) {
+	s, _ := Load(t.TempDir())
+	s.ToggleUnsure("ft_strlen")
+
+	// A pass, perhaps a lucky one, must not clear the mark: only the
+	// candidate knows whether they are confident now.
+	s.Record("ft_strlen", "OK", true)
+	if !s.IsUnsure("ft_strlen") {
+		t.Errorf("IsUnsure = false after a pass, want the mark kept")
+	}
+
+	s.ToggleUnsure("ft_strlen")
+	if st := s.Exercises["ft_strlen"]; st.Attempts != 1 || st.Passes != 1 {
+		t.Errorf("Stats = %+v after unmarking, want the attempt kept", st)
+	}
+}
+
+func TestStateWithoutUnsureFieldStillLoads(t *testing.T) {
+	// state.json written by an earlier version has no "unsure" field.
+	dir := t.TempDir()
+	old := `{"exercises":{"rot_13":{"attempts":2,"passes":1,"last_status":"OK","last_at":"2026-09-25T10:00:00Z"}}}`
+	if err := os.WriteFile(filepath.Join(dir, stateFile), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if s.IsUnsure("rot_13") {
+		t.Errorf("IsUnsure(rot_13) = true, want false for a state file that predates marks")
+	}
+	if st := s.Exercises["rot_13"]; st.Attempts != 2 {
+		t.Errorf("Attempts = %d, want 2", st.Attempts)
+	}
+}
+
+func TestIsUnsureOfAnUnknownExerciseIsFalse(t *testing.T) {
+	s, _ := Load(t.TempDir())
+	if s.IsUnsure("never_seen") {
+		t.Errorf("IsUnsure(never_seen) = true, want false")
+	}
+}
+
+func TestOldestUnsurePrefersNeverAttemptedThenLeastRecent(t *testing.T) {
+	s, _ := Load(t.TempDir())
+	pool := []string{"a", "b", "c", "d"}
+
+	if got := s.OldestUnsure(pool); got != "" {
+		t.Errorf("OldestUnsure() = %q with nothing marked, want \"\"", got)
+	}
+
+	old := time.Now().Add(-72 * time.Hour)
+	s.Exercises["a"] = &Stats{Attempts: 1, LastAt: time.Now(), Unsure: true}
+	s.Exercises["b"] = &Stats{Attempts: 1, LastAt: old, Unsure: true}
+	s.Exercises["c"] = &Stats{Attempts: 9, LastAt: old.Add(-time.Hour)} // older, but not marked
+	if got := s.OldestUnsure(pool); got != "b" {
+		t.Errorf("OldestUnsure() = %q, want b: the marked one attempted longest ago", got)
+	}
+
+	// Marked but never attempted comes before anything attempted.
+	s.Exercises["d"] = &Stats{Unsure: true}
+	if got := s.OldestUnsure(pool); got != "d" {
+		t.Errorf("OldestUnsure() = %q, want d: marked and never attempted", got)
+	}
+
+	// Only names in the pool count.
+	if got := s.OldestUnsure([]string{"a", "c"}); got != "a" {
+		t.Errorf("OldestUnsure(a,c) = %q, want a", got)
+	}
+}

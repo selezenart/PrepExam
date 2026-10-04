@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -53,6 +54,8 @@ type Model struct {
 	exam     *session.Exam
 	practice []catalog.Exercise
 	cursor   int
+	// unsureOnly narrows the practice list to exercises marked unsure.
+	unsureOnly bool
 
 	current catalog.Exercise
 	srcPath string
@@ -186,6 +189,39 @@ func (m Model) View() string {
 		return m.viewAbout()
 	}
 	return ""
+}
+
+// refreshPractice rebuilds the practice list: every exercise grouped by level
+// so the list reads in exam order, or only the ones marked unsure when the
+// filter is on. All is sorted by name and the sort is stable, so names stay
+// ordered within a level. The cursor is kept in range, since unmarking under
+// the filter removes the row it was on.
+func (m Model) refreshPractice() Model {
+	all := m.deps.Catalog.All()
+	sort.SliceStable(all, func(i, j int) bool { return all[i].Level < all[j].Level })
+	m.practice = all[:0:0]
+	for _, ex := range all {
+		if !m.unsureOnly || m.deps.State.IsUnsure(ex.Name) {
+			m.practice = append(m.practice, ex)
+		}
+	}
+	if m.cursor >= len(m.practice) {
+		m.cursor = len(m.practice) - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	return m
+}
+
+// toggleUnsure flips the unsure mark on name and saves it straight away, so a
+// mark made mid-exam survives the program being closed.
+func (m Model) toggleUnsure(name string) Model {
+	m.deps.State.ToggleUnsure(name)
+	if err := m.deps.State.Save(m.deps.StateDir); err != nil {
+		m.err = err
+	}
+	return m
 }
 
 // examAvailable reports whether every level has at least one gradable
