@@ -44,6 +44,13 @@ exam02
 Keys: `g` grade, `e` edit in `$EDITOR` (`vim` by default), `r` reveal the
 solution in practice, `w` drill your weakest exercise, `q` back.
 
+**Marking exercises you are unsure of.** Press `m` on any exercise, in practice
+or mid-exam, to mark it unsure; press it again to unmark. A mark is your own
+note to come back later: a pass does not clear it, and it never affects an
+exam's score or which exercise is drawn. In the practice list, marked
+exercises show a `?`, `f` shows only those, and `u` opens the one you have gone
+longest without attempting.
+
 ## How grading works
 
 Your file is compiled with `cc -Wall -Wextra -Werror`, so a warning fails you,

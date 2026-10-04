@@ -28,8 +28,15 @@ func (m Model) updateExercise(msg tea.KeyMsg) (Model, tea.Cmd) {
 			m.screen = screenMenu
 			return m, nil
 		}
+		// A mark may have changed here, which the filtered list must reflect.
 		m.screen = screenPractice
-		return m, nil
+		m.err = nil
+		return m.refreshPractice(), nil
+
+	case "m":
+		// Marking is the candidate's note to self. It never touches the exam:
+		// not the score, the level, nor which exercise is drawn next.
+		return m.toggleUnsure(m.current.Name), nil
 
 	case "g":
 		// A file still holding its starter stub was almost certainly not the
@@ -122,9 +129,10 @@ func (m Model) viewExercise() string {
 		if remaining < 10*time.Minute {
 			b.WriteString("  " + styleWarn.Render("!"))
 		}
-		b.WriteString("\n\n")
+		b.WriteString(m.unsureTag() + "\n\n")
 	} else {
-		b.WriteString(styleTitle.Render(fmt.Sprintf("%s   level %d", m.current.Name, m.current.Level)) + "\n\n")
+		b.WriteString(styleTitle.Render(fmt.Sprintf("%s   level %d", m.current.Name, m.current.Level)) +
+			m.unsureTag() + "\n\n")
 	}
 
 	// Notices are about the exam (a swapped exercise, the last one graded),
@@ -164,10 +172,23 @@ func (m Model) viewExercise() string {
 	return b.String()
 }
 
+// unsureTag marks the title of an exercise the candidate flagged.
+func (m Model) unsureTag() string {
+	if !m.deps.State.IsUnsure(m.current.Name) {
+		return ""
+	}
+	return "  " + styleWarn.Render("? marked unsure")
+}
+
 func (m Model) keyHints() string {
+	mark := " mark unsure"
+	if m.deps.State.IsUnsure(m.current.Name) {
+		mark = " unmark"
+	}
 	hints := []string{
 		styleKey.Render("g") + " grade",
 		styleKey.Render("e") + " edit",
+		styleKey.Render("m") + mark,
 	}
 	if m.screen == screenExercise {
 		hints = append(hints, styleKey.Render("r")+" solution")

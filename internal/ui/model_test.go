@@ -529,3 +529,191 @@ func TestOpeningAnExerciseRecordsTheWorkspaceOnDisk(t *testing.T) {
 		t.Errorf("saved Workspace = %q, want %q", saved.Workspace, root)
 	}
 }
+
+// modelWithState builds a model over state saved in stateDir, so a test can
+// read back what the interface wrote to disk.
+func modelWithState(t *testing.T, state *store.State, stateDir string) Model {
+	t.Helper()
+	return New(Deps{
+		Catalog: testCatalog(t), Grader: grader.New(), Config: store.DefaultConfig(),
+		State: state, StateDir: stateDir, Root: t.TempDir(),
+	})
+}
+
+func TestMarkingInThePracticeListTogglesAndSaves(t *testing.T) {
+	stateDir := t.TempDir()
+	state, _ := store.Load(stateDir)
+	list, _ := modelWithState(t, state, stateDir).Update(key("2"))
+
+	marked, _ := list.Update(key("m"))
+	if !marked.deps.State.IsUnsure("ft_strlen") {
+		t.Fatalf("m on the first row did not mark ft_strlen")
+	}
+	if !strings.Contains(marked.View(), "?") {
+		t.Errorf("the practice list does not show the mark:\n%s", marked.View())
+	}
+	saved, _ := store.Load(stateDir)
+	if !saved.IsUnsure("ft_strlen") {
+		t.Errorf("the mark was not saved to disk")
+	}
+
+	unmarked, _ := marked.Update(key("m"))
+	if unmarked.deps.State.IsUnsure("ft_strlen") {
+		t.Errorf("a second m did not unmark ft_strlen")
+	}
+}
+
+func TestPracticeFilterShowsOnlyMarkedExercises(t *testing.T) {
+	state, _ := store.Load(t.TempDir())
+	state.ToggleUnsure("epur_str")
+	list, _ := modelWithState(t, state, t.TempDir()).Update(key("2"))
+
+	filtered, _ := list.Update(key("f"))
+	if len(filtered.practice) != 1 || filtered.practice[0].Name != "epur_str" {
+		t.Fatalf("filtered list = %v, want only epur_str", names(filtered.practice))
+	}
+	if strings.Contains(filtered.View(), "ft_strlen") {
+		t.Errorf("an unmarked exercise is still listed:\n%s", filtered.View())
+	}
+
+	all, _ := filtered.Update(key("f"))
+	if len(all.practice) != 4 {
+		t.Errorf("after a second f the list has %d exercises, want all 4", len(all.practice))
+	}
+}
+
+func TestAnEmptyFilterSaysHowToMark(t *testing.T) {
+	list, _ := newTestModel(t).Update(key("2"))
+	filtered, _ := list.Update(key("f"))
+	if len(filtered.practice) != 0 {
+		t.Fatalf("filtered list = %v, want empty", names(filtered.practice))
+	}
+	if !strings.Contains(filtered.View(), "no exercises marked unsure") {
+		t.Errorf("an empty filter does not explain itself:\n%s", filtered.View())
+	}
+	// Keys that act on a row must not panic on an empty list.
+	for _, k := range []string{"m", "enter", "j", "k", "u"} {
+		filtered.Update(key(k))
+	}
+}
+
+func TestUnmarkingInTheFilteredListDropsTheRowAndKeepsTheCursorInRange(t *testing.T) {
+	state, _ := store.Load(t.TempDir())
+	state.ToggleUnsure("ft_strlen")
+	state.ToggleUnsure("ft_split")
+	list, _ := modelWithState(t, state, t.TempDir()).Update(key("2"))
+	filtered, _ := list.Update(key("f"))
+	last, _ := filtered.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if last.cursor != 1 {
+		t.Fatalf("cursor = %d, want 1", last.cursor)
+	}
+
+	after, _ := last.Update(key("m"))
+	if len(after.practice) != 1 || after.practice[0].Name != "ft_strlen" {
+		t.Fatalf("filtered list after unmarking = %v, want only ft_strlen", names(after.practice))
+	}
+	if after.cursor != 0 {
+		t.Errorf("cursor = %d after its row vanished, want 0", after.cursor)
+	}
+}
+
+func TestDrillUnsureOpensTheMarkedOneAttemptedLongestAgo(t *testing.T) {
+	state, _ := store.Load(t.TempDir())
+	state.Record("ft_atoi", "OK", true)
+	state.Exercises["ft_atoi"].LastAt = time.Now().Add(-48 * time.Hour)
+	state.Record("ft_split", "OK", true)
+	state.ToggleUnsure("ft_atoi")
+	state.ToggleUnsure("ft_split")
+	list, _ := modelWithState(t, state, t.TempDir()).Update(key("2"))
+
+	drill, _ := list.Update(key("u"))
+	if drill.screen != screenExercise || drill.current.Name != "ft_atoi" {
+		t.Errorf("u opened %q on screen %d, want ft_atoi on the exercise screen", drill.current.Name, drill.screen)
+	}
+}
+
+func TestDrillUnsureWithNothingMarkedSaysSo(t *testing.T) {
+	list, _ := newTestModel(t).Update(key("2"))
+	drill, _ := list.Update(key("u"))
+	if drill.screen != screenPractice {
+		t.Fatalf("u with nothing marked left the list for screen %d", drill.screen)
+	}
+	if !strings.Contains(drill.View(), "nothing is marked unsure") {
+		t.Errorf("u with nothing marked gave no explanation:\n%s", drill.View())
+	}
+}
+
+func TestMarkingOnThePracticeExerciseScreen(t *testing.T) {
+	stateDir := t.TempDir()
+	state, _ := store.Load(stateDir)
+	list, _ := modelWithState(t, state, stateDir).Update(key("2"))
+	ex, _ := list.Update(key("enter"))
+	if !strings.Contains(ex.View(), "m") || !strings.Contains(ex.View(), "mark") {
+		t.Errorf("the exercise screen does not offer m to mark:\n%s", ex.View())
+	}
+
+	marked, _ := ex.Update(key("m"))
+	if !marked.deps.State.IsUnsure("ft_strlen") {
+		t.Fatalf("m on the exercise screen did not mark ft_strlen")
+	}
+	if !strings.Contains(marked.View(), "marked unsure") {
+		t.Errorf("the exercise screen does not show the mark:\n%s", marked.View())
+	}
+	if saved, _ := store.Load(stateDir); !saved.IsUnsure("ft_strlen") {
+		t.Errorf("the mark was not saved to disk")
+	}
+}
+
+func TestMarkingDuringAnExamLeavesTheExamAlone(t *testing.T) {
+	m := newTestModel(t)
+	exam, _ := m.Update(key("1"))
+	name, level, points := exam.exam.Current(), exam.exam.Level(), exam.exam.Points()
+
+	marked, _ := exam.Update(key("m"))
+	if marked.screen != screenExam {
+		t.Fatalf("m during an exam moved to screen %d", marked.screen)
+	}
+	if !marked.deps.State.IsUnsure(name) {
+		t.Errorf("m during an exam did not mark %s", name)
+	}
+	if marked.exam.Current() != name || marked.exam.Level() != level || marked.exam.Points() != points {
+		t.Errorf("marking changed the exam: now %s level %d %d points, was %s level %d %d points",
+			marked.exam.Current(), marked.exam.Level(), marked.exam.Points(), name, level, points)
+	}
+	if !strings.Contains(marked.View(), "marked unsure") {
+		t.Errorf("the exam screen does not show the mark:\n%s", marked.View())
+	}
+}
+
+func TestLeavingAnExerciseRefreshesTheFilteredList(t *testing.T) {
+	state, _ := store.Load(t.TempDir())
+	state.ToggleUnsure("ft_strlen")
+	list, _ := modelWithState(t, state, t.TempDir()).Update(key("2"))
+	filtered, _ := list.Update(key("f"))
+	ex, _ := filtered.Update(key("enter"))
+	unmarked, _ := ex.Update(key("m"))
+	back, _ := unmarked.Update(key("q"))
+	if len(back.practice) != 0 {
+		t.Errorf("filtered list after unmarking inside the exercise = %v, want empty", names(back.practice))
+	}
+}
+
+func names(exs []catalog.Exercise) []string {
+	out := make([]string, 0, len(exs))
+	for _, ex := range exs {
+		out = append(out, ex.Name)
+	}
+	return out
+}
+
+func TestAPracticeListErrorClearsOnTheNextKey(t *testing.T) {
+	list, _ := newTestModel(t).Update(key("2"))
+	list.err = errors.New("saving state: disk full")
+	if !strings.Contains(list.View(), "disk full") {
+		t.Fatalf("the practice list does not show an error:\n%s", list.View())
+	}
+	next, _ := list.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if strings.Contains(next.View(), "disk full") {
+		t.Errorf("the error is still shown after another key:\n%s", next.View())
+	}
+}

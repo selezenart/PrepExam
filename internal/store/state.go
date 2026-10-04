@@ -16,6 +16,11 @@ type Stats struct {
 	Passes     int       `json:"passes"`
 	LastStatus string    `json:"last_status"`
 	LastAt     time.Time `json:"last_at"`
+
+	// Unsure is the candidate's own flag for an exercise to come back to. It
+	// is independent of the record: a pass does not clear it, since a lucky
+	// pass still leaves someone unsure, and only they can say otherwise.
+	Unsure bool `json:"unsure,omitempty"`
 }
 
 // Failures is how many attempts did not pass.
@@ -124,6 +129,47 @@ func (s *State) Weakest(pool []string) string {
 		if best == "" || failures > bestFailures ||
 			(failures == bestFailures && st.LastAt.Before(bestAt)) {
 			best, bestFailures, bestAt = name, failures, st.LastAt
+		}
+	}
+	return best
+}
+
+// ToggleUnsure flips the unsure mark on exercise and returns the new value.
+// Marking needs no attempt first: someone can be unsure of an exercise they
+// have only read.
+func (s *State) ToggleUnsure(exercise string) bool {
+	st, ok := s.Exercises[exercise]
+	if !ok {
+		st = &Stats{}
+		s.Exercises[exercise] = st
+	}
+	st.Unsure = !st.Unsure
+	return st.Unsure
+}
+
+// IsUnsure reports whether exercise is marked unsure.
+func (s *State) IsUnsure(exercise string) bool {
+	st, ok := s.Exercises[exercise]
+	return ok && st.Unsure
+}
+
+// OldestUnsure picks the marked exercise from pool that has waited longest
+// for another try: one never attempted, else the one attempted longest ago.
+// Returns "" when nothing in pool is marked.
+func (s *State) OldestUnsure(pool []string) string {
+	var best string
+	var bestAt time.Time
+
+	for _, name := range pool {
+		st, ok := s.Exercises[name]
+		if !ok || !st.Unsure {
+			continue
+		}
+		if st.Attempts == 0 {
+			return name
+		}
+		if best == "" || st.LastAt.Before(bestAt) {
+			best, bestAt = name, st.LastAt
 		}
 	}
 	return best
