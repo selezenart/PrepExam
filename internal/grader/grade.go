@@ -14,7 +14,15 @@ import (
 
 // compileFlags are the flags the real exam compiles with. A warning is a
 // failure, so -Werror is not negotiable.
-var compileFlags = []string{"-Wall", "-Wextra", "-Werror"}
+//
+// Two more keep a modern compiler grading the C the subjects are written in.
+// Some subjects prescribe old-style declarations such as
+// ft_list_remove_if's int (*cmp)(): -std=gnu17 stops a compiler that
+// defaults to C23 (GCC 15 does) from reading () as "no parameters" and
+// rejecting every call, and -Wno-deprecated-non-prototype stops Clang 15+
+// from failing such a call under -Werror. The exam's own compiler accepts
+// both; everything else is still a warning and still a failure.
+var compileFlags = []string{"-Wall", "-Wextra", "-Werror", "-std=gnu17", "-Wno-deprecated-non-prototype"}
 
 // Grader compiles and runs candidate solutions against the reference.
 //

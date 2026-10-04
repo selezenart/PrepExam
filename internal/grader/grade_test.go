@@ -265,3 +265,84 @@ func TestGradeErrorsWhenTheReferenceTimesOut(t *testing.T) {
 		t.Fatalf("Grade() = %s %q, want an error: the reference produced no answer to compare with", v.Status, v.Summary)
 	}
 }
+
+func embeddedExercise(t *testing.T, name string) catalog.Exercise {
+	t.Helper()
+	c, err := catalog.Embedded()
+	if err != nil {
+		t.Fatalf("catalog.Embedded() error = %v", err)
+	}
+	ex, ok := c.ByName(name)
+	if !ok {
+		t.Fatalf("%s is not in the catalog", name)
+	}
+	return ex
+}
+
+// The ft_list_remove_if subject prescribes int (*cmp)(), a parameter list
+// with no prototype. Clang 15 and later reject calling through it under
+// -Werror, and in C23 it means "no parameters", so an answer copied from the
+// subject failed to compile here while it passes the real exam.
+func TestGradeAcceptsAnOldStylePrototypeTakenFromTheSubject(t *testing.T) {
+	ex := embeddedExercise(t, "ft_list_remove_if")
+	answer := `#include <stdlib.h>
+#include "ft_list.h"
+
+void	ft_list_remove_if(t_list **begin_list, void *data_ref, int (*cmp)())
+{
+	t_list	*cur;
+
+	if (!begin_list || !*begin_list)
+		return ;
+	cur = *begin_list;
+	if (cmp(cur->data, data_ref) == 0)
+	{
+		*begin_list = cur->next;
+		free(cur);
+		ft_list_remove_if(begin_list, data_ref, cmp);
+	}
+	else
+		ft_list_remove_if(&cur->next, data_ref, cmp);
+}
+`
+	if v := gradeSource(t, ex, answer); !v.Passed() {
+		t.Errorf("an answer using the subject's prototype failed: %s: %s\n%s", v.Status, v.Summary, v.Detail)
+	}
+}
+
+// Accepting the subject's prototype must not loosen -Werror for anything else.
+func TestGradeStillRejectsOtherWarningsInAnOldStylePrototypeExercise(t *testing.T) {
+	ex := embeddedExercise(t, "ft_list_remove_if")
+	answer := `#include <stdlib.h>
+#include "ft_list.h"
+
+void	ft_list_remove_if(t_list **begin_list, void *data_ref, int (*cmp)())
+{
+	int	unused;
+
+	(void)begin_list;
+	(void)data_ref;
+	(void)cmp;
+}
+`
+	if v := gradeSource(t, ex, answer); v.Status != StatusCompileError {
+		t.Errorf("Status = %q, want %q: an unused variable must still fail", v.Status, StatusCompileError)
+	}
+}
+
+// The language is pinned so a compiler defaulting to C23, as GCC 15 does,
+// grades the same C the exam is written in. Under C23 int (*cmp)() means a
+// function taking no arguments and every call through it is an error.
+func TestCompileFlagsPinCAndKeepTheExamWarnings(t *testing.T) {
+	want := map[string]bool{"-Wall": false, "-Wextra": false, "-Werror": false, "-std=gnu17": false}
+	for _, f := range compileFlags {
+		if _, ok := want[f]; ok {
+			want[f] = true
+		}
+	}
+	for f, found := range want {
+		if !found {
+			t.Errorf("compileFlags = %v, missing %s", compileFlags, f)
+		}
+	}
+}
